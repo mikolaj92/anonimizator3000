@@ -6,13 +6,15 @@ Upload trafia wyłącznie do pamięci procesu. Aplikacja nie zapisuje oryginalny
 
 ## Architektura
 
-Projekt jest monorepo z trzema pakietami UV:
+Ten projekt jest tylko portalem/orchestratorem. Logika dokumentów i anonimizacji
+jest w osobnych pakietach obok tego katalogu:
 
-- `packages/DocToText` - odczyt tekstu z dokumentów i zapis podmienionego tekstu z powrotem do dokumentu.
-- `packages/Posejdon` - anonimizacja tekstu przez Presidio, regex/walidację PL i opcjonalny GLiNER.
+- `../DocToText` - odczyt tekstu z dokumentów i zapis podmienionego tekstu z powrotem do dokumentu.
+- `../Posejdon` - anonimizacja tekstu przez Presidio, regex/walidację PL i opcjonalny GLiNER.
 - `src/anonimizator3000` - portal, upload, kolejka, limity per IP, integracja dwóch pakietów.
 
-Root `pyproject.toml` ma editable sources do pakietów w `packages/`, więc `uv sync` spina całość bez publikowania paczek.
+`pyproject.toml` ma editable sources do `../DocToText` i `../Posejdon`.
+Anonimizator nie ma własnego ekstraktora dokumentów ani własnego silnika anonimizacji.
 
 ## Stack
 
@@ -26,6 +28,11 @@ Root `pyproject.toml` ma editable sources do pakietów w `packages/`, więc `uv 
 ## Uruchomienie
 
 ```bash
+cd ~/Developer/OSS
+git clone https://github.com/mikolaj92/DocToText.git
+git clone https://github.com/mikolaj92/Posejdon.git
+git clone https://github.com/mikolaj92/anonimizator3000.git
+cd anonimizator3000
 uv sync
 uv run uvicorn anonimizator3000.main:app --reload
 ```
@@ -73,7 +80,7 @@ Regex/walidacja obejmuje między innymi:
 GLiNER jest opcjonalny, bo wymaga cięższych zależności i modelu:
 
 ```bash
-uv sync --extra ml
+uv sync --extra detectors
 ANON_GLINER_ENABLED=true uv run uvicorn anonimizator3000.main:app --reload
 ```
 

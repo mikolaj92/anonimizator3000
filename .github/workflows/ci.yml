@@ -18,6 +18,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          path: anonimizator3000
+
+      - uses: actions/checkout@v6
+        with:
+          repository: mikolaj92/DocToText
+          path: DocToText
+
+      - uses: actions/checkout@v6
+        with:
+          repository: mikolaj92/Posejdon
+          path: Posejdon
 
       - uses: actions/setup-python@v6
         with:
@@ -27,9 +39,12 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --dev
+        working-directory: anonimizator3000
 
       - name: Lint
         run: uv run ruff check .
+        working-directory: anonimizator3000
 
       - name: Test
-        run: uv run pytest tests packages/DocToText/tests packages/Posejdon/tests
+        run: uv run pytest
+        working-directory: anonimizator3000

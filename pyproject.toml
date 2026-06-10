@@ -30,13 +30,13 @@ dev = [
 ]
 
 [project.optional-dependencies]
-ml = [
-    "posejdon[ml]",
+detectors = [
+    "posejdon[detectors]",
 ]
 
 [tool.uv.sources]
-doctotext = { path = "packages/DocToText", editable = true }
-posejdon = { path = "packages/Posejdon", editable = true }
+doctotext = { path = "../DocToText", editable = true }
+posejdon = { path = "../Posejdon", editable = true }
 
 [project.scripts]
 anonimizator3000 = "anonimizator3000.main:main"
