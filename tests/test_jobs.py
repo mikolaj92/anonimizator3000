@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from anonimizator3000.jobs import InMemoryJobQueue, QueueRejected
+from anonimizator3000.jobs import DocumentProcessingQueue, QueueRejected
 from anonimizator3000.processor import ProcessedDocument
 
 
@@ -15,7 +15,7 @@ def _processor(filename: str, content_type: str, data: bytes) -> ProcessedDocume
     )
 
 
-async def _wait_for_done(queue: InMemoryJobQueue, job_id: str):
+async def _wait_for_done(queue: DocumentProcessingQueue, job_id: str):
     for _ in range(50):
         snapshot = await queue.get(job_id)
         if snapshot and snapshot.status == "done":
@@ -26,7 +26,7 @@ async def _wait_for_done(queue: InMemoryJobQueue, job_id: str):
 
 @pytest.mark.asyncio
 async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing() -> None:
-    queue = InMemoryJobQueue(
+    queue = DocumentProcessingQueue(
         processor=_processor,
         max_size=10,
         worker_count=1,
@@ -57,10 +57,18 @@ async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_proc
     document = await queue.result_document(first.id)
     assert document == ("result.txt", "text/plain; charset=utf-8", b"<REDACTED>")
 
+    event_types = [event.type for event in await queue.events(first.id)]
+    assert event_types == [
+        "document.initialized",
+        "process.queued",
+        "process.claimed",
+        "process.completed",
+    ]
+
 
 @pytest.mark.asyncio
 async def test_queue_rate_limits_submissions_per_ip() -> None:
-    queue = InMemoryJobQueue(
+    queue = DocumentProcessingQueue(
         processor=_processor,
         max_size=10,
         worker_count=1,

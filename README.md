@@ -11,9 +11,10 @@ jest w osobnych pakietach obok tego katalogu:
 
 - `../DocToText` - odczyt tekstu z dokumentów i zapis podmienionego tekstu z powrotem do dokumentu.
 - `../Posejdon` - anonimizacja tekstu przez Presidio, regex/walidację PL i opcjonalny GLiNER.
-- `src/anonimizator3000` - portal, upload, kolejka, limity per IP, integracja dwóch pakietów.
+- `../Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
+- `src/anonimizator3000` - portal, upload, limity per IP, lokalny worker i integracja trzech pakietów.
 
-`pyproject.toml` ma editable sources do `../DocToText` i `../Posejdon`.
+`pyproject.toml` ma editable sources do `../DocToText`, `../Posejdon` i `../Fala`.
 Anonimizator nie ma własnego ekstraktora dokumentów ani własnego silnika anonimizacji.
 
 ## Stack
@@ -24,12 +25,14 @@ Anonimizator nie ma własnego ekstraktora dokumentów ani własnego silnika anon
 - Basecoat UI
 - DocToText
 - Posejdon
+- Fala
 
 ## Uruchomienie
 
 ```bash
 cd ~/Developer/OSS
 git clone https://github.com/mikolaj92/DocToText.git
+git clone https://github.com/mikolaj92/Fala.git
 git clone https://github.com/mikolaj92/Posejdon.git
 git clone https://github.com/mikolaj92/anonimizator3000.git
 cd anonimizator3000
@@ -122,7 +125,7 @@ uv run ruff check .
 
 - brak zapisu uploadów na dysku
 - brak bazy danych
-- kolejka w pamięci procesu
+- workflow Fali działa na lokalnym store w pamięci procesu
 - wynik wygasa po TTL
 - odrzucanie za dużych plików przed anonimizacją
 - limit aktywnych zadań i rate limit per IP

@@ -26,6 +26,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "doctotext" },
+    { name = "fala" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "posejdon" },
@@ -53,6 +54,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "doctotext", editable = "../DocToText" },
+    { name = "fala", editable = "../Fala" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "posejdon", editable = "../Posejdon" },
@@ -395,6 +397,25 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "fala"
+version = "0.1.0"
+source = { editable = "../Fala" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.7.0" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
+]
 
 [[package]]
 name = "fastapi"

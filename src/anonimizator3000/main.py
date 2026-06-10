@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from anonimizator3000.config import Settings, settings_from_env
-from anonimizator3000.jobs import InMemoryJobQueue, JobSnapshot, QueueRejected
+from anonimizator3000.jobs import DocumentProcessingQueue, JobSnapshot, QueueRejected
 from anonimizator3000.processor import DocumentProcessor
 from anonimizator3000.upload import UploadError, read_multipart_document
 
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
         gliner_model=settings.gliner_model,
         gliner_threshold=settings.gliner_threshold,
     )
-    queue = InMemoryJobQueue(
+    queue = DocumentProcessingQueue(
         processor=processor,
         max_size=settings.queue_max_size,
         worker_count=settings.worker_count,
@@ -134,7 +134,7 @@ def _settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
-def _queue(request: Request) -> InMemoryJobQueue:
+def _queue(request: Request) -> DocumentProcessingQueue:
     return request.app.state.queue
 
 

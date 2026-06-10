@@ -28,6 +28,11 @@ jobs:
 
       - uses: actions/checkout@v6
         with:
+          repository: mikolaj92/Fala
+          path: Fala
+
+      - uses: actions/checkout@v6
+        with:
           repository: mikolaj92/Posejdon
           path: Posejdon
 
