@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dokumenty</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.11/dist/basecoat.cdn.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.11/dist/js/all.min.js" defer></script>
+    <script src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="grid">
+        <div class="card upload-card">
+          <div class="card-header">
+            <h2 class="card-title">Plik</h2>
+            <p class="card-description">Wrzucasz dokument. Pobierasz zanonimizowany.</p>
+          </div>
+          <div class="card-content">
+            <form
+              hx-post="/jobs"
+              hx-target="#job-panel"
+              hx-swap="innerHTML"
+              method="post"
+              enctype="multipart/form-data"
+              class="upload-form"
+            >
+              <label class="dropzone" for="document">
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon-lg">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" x2="12" y1="3" y2="15"/>
+                </svg>
+                <span>Wybierz dokument</span>
+                <small>PDF, DOCX, TXT do {{ (settings.max_file_bytes / 1000000) | round(1) }} MB</small>
+              </label>
+              <input
+                id="document"
+                class="input"
+                type="file"
+                name="document"
+                accept=".txt,.md,.csv,.json,.xml,.html,.htm,.log,.rtf,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                required
+              >
+              <button class="btn" type="submit">
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" x2="12" y1="3" y2="15"/>
+                </svg>
+                Anonimizuj
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div id="job-panel" class="result-panel"></div>
+      </section>
+    </main>
+  </body>
+</html>

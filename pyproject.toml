@@ -1,0 +1,57 @@
+[project]
+name = "anonimizator3000"
+version = "0.1.0"
+description = "Public document anonymization portal using FastAPI, HTMX, Basecoat, Presidio, and regex recognizers."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = { text = "MIT" }
+authors = [
+    { name = "Anonimizator3000 contributors" },
+]
+dependencies = [
+    "doctotext",
+    "fastapi>=0.115.0",
+    "jinja2>=3.1.0",
+    "posejdon",
+    "pydantic>=2.10.0",
+    "python-multipart>=0.0.12",
+    "uvicorn[standard]>=0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.0",
+    "pypdf>=5.0.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "python-docx>=1.1.0",
+    "reportlab>=4.2.0",
+    "ruff>=0.9.0",
+]
+
+[project.optional-dependencies]
+ml = [
+    "posejdon[ml]",
+]
+
+[tool.uv.sources]
+doctotext = { path = "packages/DocToText", editable = true }
+posejdon = { path = "packages/Posejdon", editable = true }
+
+[project.scripts]
+anonimizator3000 = "anonimizator3000.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

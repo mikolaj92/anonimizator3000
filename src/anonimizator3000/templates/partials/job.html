@@ -1,0 +1,94 @@
+<div
+  id="job-card"
+  class="card result-card"
+  {% if job.status in ["queued", "processing"] %}
+    hx-get="/jobs/{{ job.id }}"
+    hx-trigger="load delay:1s"
+    hx-swap="outerHTML"
+  {% endif %}
+>
+  <div class="card-header">
+    <div class="job-title-row">
+      <h2 class="card-title">
+        {% if job.status == "done" %}
+          Gotowe
+        {% elif job.status == "failed" %}
+          Błąd
+        {% elif job.status == "processing" %}
+          Przetwarzam
+        {% else %}
+          W kolejce
+        {% endif %}
+      </h2>
+      <span class="badge">{{ "%.1fs"|format(job.elapsed_seconds) }}</span>
+    </div>
+  </div>
+
+  <div class="card-content">
+    {% if job.status in ["queued", "processing"] %}
+      <div class="progress-block">
+        <div
+          class="progress-track"
+          role="progressbar"
+          aria-valuenow="{{ job.progress_percent }}"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <div
+            class="progress-fill {% if job.status == "processing" %}is-active{% endif %}"
+            style="width: {{ job.progress_percent }}%"
+          ></div>
+        </div>
+        <div class="job-meta">
+          <span>{{ job.status }}</span>
+          {% if job.queue_position %}
+            <span>kolejka #{{ job.queue_position }}</span>
+          {% endif %}
+          <span>{{ "%.1fs"|format(job.elapsed_seconds) }}</span>
+        </div>
+      </div>
+    {% elif job.status == "failed" %}
+      <div class="alert" role="alert">
+        <strong>Błąd</strong>
+        <p>{{ job.error }}</p>
+      </div>
+    {% elif job.status == "done" %}
+      {% if job.findings %}
+        <div class="findings" aria-label="Wykryte typy danych">
+          {% for entity, count in job.findings.items() %}
+            <span class="badge">{{ entity }}: {{ count }}</span>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert muted" role="status">Nie wykryto danych do anonimizacji.</div>
+      {% endif %}
+
+      <div class="document-ready">
+        <svg aria-hidden="true" viewBox="0 0 24 24" class="icon-lg">
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+          <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+          <path d="M9 15l2 2 4-5"/>
+        </svg>
+        <div>
+          <strong>{{ job.result_filename }}</strong>
+          <p>
+            {{ "%.1fs"|format(job.elapsed_seconds) }}
+            {% if job.result_size %}
+              · {{ (job.result_size / 1024) | round(1) }} KB
+            {% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="actions-row">
+        <a class="btn" href="/jobs/{{ job.id }}/download">
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" x2="12" y1="15" y2="3"/>
+          </svg>
+          Pobierz
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
