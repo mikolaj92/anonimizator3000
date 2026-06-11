@@ -243,7 +243,7 @@ dependencies = [
 [[package]]
 name = "fala"
 version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/Fala.git?branch=main#c98bd30be18ab739c1a069ee909e629bf1b05aed" }
+source = { git = "https://github.com/mikolaj92/Fala.git?branch=main#f3394b97d8136e0468df2f542052ad8bdde26bac" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
