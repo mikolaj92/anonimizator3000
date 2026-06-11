@@ -28,7 +28,14 @@ jobs:
       - uses: astral-sh/setup-uv@v8.2.0
 
       - name: Configure GitHub dependency auth
-        run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+        env:
+          POSEJDON_READ_TOKEN: ${{ secrets.POSEJDON_READ_TOKEN }}
+        run: |
+          if [ -z "$POSEJDON_READ_TOKEN" ]; then
+            echo "POSEJDON_READ_TOKEN secret is required while mikolaj92/Posejdon is private." >&2
+            exit 1
+          fi
+          git config --global url."https://x-access-token:${POSEJDON_READ_TOKEN}@github.com/".insteadOf "https://github.com/"
 
       - name: Install dependencies
         run: uv sync --dev
