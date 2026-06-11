@@ -234,7 +234,7 @@ nvtx = [
 [[package]]
 name = "doctotext"
 version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/DocToText.git?branch=main#e0992b387d8f2d59d0d2eab751b74bb2de77185f" }
+source = { git = "https://github.com/mikolaj92/DocToText.git?branch=main#f56fe471c2121148084f4d4ffec3d51673e46065" }
 dependencies = [
     { name = "pymupdf" },
     { name = "pypdf" },
