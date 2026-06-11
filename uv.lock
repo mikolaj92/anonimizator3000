@@ -53,12 +53,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "doctotext", editable = "../DocToText" },
-    { name = "fala", editable = "../Fala" },
+    { name = "doctotext", git = "https://github.com/mikolaj92/DocToText.git?branch=main" },
+    { name = "fala", git = "https://github.com/mikolaj92/Fala.git?branch=main" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "posejdon", editable = "../Posejdon" },
-    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", editable = "../Posejdon" },
+    { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?branch=main" },
+    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?branch=main" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "python-multipart", specifier = ">=0.0.12" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
@@ -383,38 +383,21 @@ wheels = [
 [[package]]
 name = "doctotext"
 version = "0.1.0"
-source = { editable = "../DocToText" }
+source = { git = "https://github.com/mikolaj92/DocToText.git?branch=main#eeff6440ef6eb08ed16733b4898b795a34d4bc29" }
 dependencies = [
     { name = "pypdf" },
     { name = "reportlab" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "pypdf", specifier = ">=5.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "reportlab", specifier = ">=4.2.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
-]
-provides-extras = ["dev"]
-
 [[package]]
 name = "fala"
 version = "0.1.0"
-source = { editable = "../Fala" }
+source = { git = "https://github.com/mikolaj92/Fala.git?branch=main#c6aa78a6992770929cc22084a58f9cbee439f39a" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "pydantic", specifier = ">=2.7.0" },
-    { name = "pyyaml", specifier = ">=6.0.0" },
 ]
 
 [[package]]
@@ -1057,7 +1040,7 @@ wheels = [
 [[package]]
 name = "posejdon"
 version = "0.1.0"
-source = { editable = "../Posejdon" }
+source = { git = "https://github.com/mikolaj92/Posejdon.git?branch=main#fc01c06c7602fb137128a1267aea7a26dba208a0" }
 dependencies = [
     { name = "click" },
     { name = "httpx" },
@@ -1075,27 +1058,6 @@ detectors = [
     { name = "presidio-anonymizer" },
     { name = "spacy" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.0.0" },
-    { name = "gliner", marker = "extra == 'detectors'", specifier = ">=0.2.22" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "mlx", marker = "extra == 'llm'", specifier = ">=0.31.0" },
-    { name = "mlx-lm", marker = "extra == 'llm'", specifier = ">=0.31.0" },
-    { name = "openai", marker = "extra == 'llm'", specifier = ">=2.26.0" },
-    { name = "presidio-analyzer", marker = "extra == 'detectors'", specifier = ">=2.2.357" },
-    { name = "presidio-anonymizer", marker = "extra == 'detectors'", specifier = ">=2.2.357" },
-    { name = "pydantic", specifier = ">=2.11.0" },
-    { name = "pydantic-settings", specifier = ">=2.8.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "regex", specifier = ">=2025.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
-    { name = "spacy", marker = "extra == 'detectors'", specifier = ">=3.8.7" },
-]
-provides-extras = ["detectors", "llm", "dev"]
 
 [[package]]
 name = "preshed"

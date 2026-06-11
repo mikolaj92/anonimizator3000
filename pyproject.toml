@@ -36,9 +36,9 @@ detectors = [
 ]
 
 [tool.uv.sources]
-doctotext = { path = "../DocToText", editable = true }
-fala = { path = "../Fala", editable = true }
-posejdon = { path = "../Posejdon", editable = true }
+doctotext = { git = "https://github.com/mikolaj92/DocToText.git", branch = "main" }
+fala = { git = "https://github.com/mikolaj92/Fala.git", branch = "main" }
+posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", branch = "main" }
 
 [project.scripts]
 anonimizator3000 = "anonimizator3000.main:main"

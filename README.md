@@ -7,14 +7,14 @@ Upload trafia wyłącznie do pamięci procesu. Aplikacja nie zapisuje oryginalny
 ## Architektura
 
 Ten projekt jest tylko portalem/orchestratorem. Logika dokumentów i anonimizacji
-jest w osobnych pakietach obok tego katalogu:
+jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 
-- `../DocToText` - odczyt tekstu z dokumentów i zapis podmienionego tekstu z powrotem do dokumentu.
-- `../Posejdon` - anonimizacja tekstu przez Presidio, regex/walidację PL i opcjonalny GLiNER.
-- `../Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
+- `github.com/mikolaj92/DocToText` - odczyt tekstu z dokumentów i zapis podmienionego tekstu z powrotem do dokumentu.
+- `github.com/mikolaj92/Posejdon` - anonimizacja tekstu przez Presidio, regex/walidację PL i opcjonalny GLiNER.
+- `github.com/mikolaj92/Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
 - `src/anonimizator3000` - portal, upload, limity per IP, lokalny worker i integracja trzech pakietów.
 
-`pyproject.toml` ma editable sources do `../DocToText`, `../Posejdon` i `../Fala`.
+`pyproject.toml` ma GitHub sources dla `DocToText`, `Posejdon` i `Fala`.
 Anonimizator nie ma własnego ekstraktora dokumentów ani własnego silnika anonimizacji.
 
 ## Stack
@@ -30,15 +30,13 @@ Anonimizator nie ma własnego ekstraktora dokumentów ani własnego silnika anon
 ## Uruchomienie
 
 ```bash
-cd ~/Developer/OSS
-git clone https://github.com/mikolaj92/DocToText.git
-git clone https://github.com/mikolaj92/Fala.git
-git clone https://github.com/mikolaj92/Posejdon.git
 git clone https://github.com/mikolaj92/anonimizator3000.git
 cd anonimizator3000
 uv sync
 uv run uvicorn anonimizator3000.main:app --reload
 ```
+
+`Posejdon` jest prywatnym repo. `uv sync` wymaga dostępu GitHub do tego repo.
 
 Potem otwórz `http://127.0.0.1:8000`.
 

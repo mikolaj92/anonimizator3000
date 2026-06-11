@@ -21,26 +21,14 @@ jobs:
         with:
           path: anonimizator3000
 
-      - uses: actions/checkout@v6
-        with:
-          repository: mikolaj92/DocToText
-          path: DocToText
-
-      - uses: actions/checkout@v6
-        with:
-          repository: mikolaj92/Fala
-          path: Fala
-
-      - uses: actions/checkout@v6
-        with:
-          repository: mikolaj92/Posejdon
-          path: Posejdon
-
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
       - uses: astral-sh/setup-uv@v8.2.0
+
+      - name: Configure GitHub dependency auth
+        run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install dependencies
         run: uv sync --dev
