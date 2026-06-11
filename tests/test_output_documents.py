@@ -1,5 +1,8 @@
 from io import BytesIO
+from pathlib import Path
 
+import fitz
+import pytest
 from doctotext import DOCX_MIME, PDF_MIME
 from docx import Document
 from pypdf import PdfReader
@@ -7,6 +10,15 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from anonimizator3000.processor import DocumentProcessor
+
+UNICODE_FONT_CANDIDATES = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/usr/local/share/fonts/DejaVuSans.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/Library/Fonts/Arial Unicode.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+)
 
 
 def _docx_bytes(text: str) -> bytes:
@@ -25,6 +37,29 @@ def _pdf_bytes(text: str) -> bytes:
     return output.getvalue()
 
 
+def _unicode_pdf_bytes(*pages: str) -> bytes:
+    font_path = next((path for path in UNICODE_FONT_CANDIDATES if Path(path).exists()), None)
+    if font_path is None:
+        pytest.skip("Unicode font unavailable for PDF fixture")
+
+    pdf = fitz.open()
+    for text in pages:
+        page = pdf.new_page(width=595, height=842)
+        page.insert_textbox(
+            fitz.Rect(48, 48, 547, 794),
+            text,
+            fontfile=font_path,
+            fontname="anonimizatorunicode",
+            fontsize=12,
+        )
+    return pdf.tobytes()
+
+
+def _fitz_pdf_text(data: bytes) -> str:
+    pdf = fitz.open(stream=data, filetype="pdf")
+    return "\n".join(page.get_text("text") or "" for page in pdf).replace("\xa0", " ")
+
+
 def test_processor_returns_anonymized_docx_document() -> None:
     processor = DocumentProcessor(max_text_chars=10_000)
 
@@ -38,6 +73,24 @@ def test_processor_returns_anonymized_docx_document() -> None:
 
     output_docx = Document(BytesIO(result.data))
     output_text = "\n".join(paragraph.text for paragraph in output_docx.paragraphs)
+    assert "Jan Kowalski" not in output_text
+    assert "44051401359" not in output_text
+
+
+def test_pdf_processor_preserves_polish_text_and_page_count() -> None:
+    processor = DocumentProcessor(max_text_chars=10_000)
+    data = _unicode_pdf_bytes(
+        "Dane nie są fikcyjne. Zażółć gęślą jaźń. Jan Kowalski PESEL 44051401359",
+        "Druga strona bez danych.",
+    )
+
+    result = processor("sample.pdf", PDF_MIME, data)
+    output_pdf = fitz.open(stream=result.data, filetype="pdf")
+    output_text = _fitz_pdf_text(result.data)
+
+    assert output_pdf.page_count == 2
+    assert "Dane nie są fikcyjne" in output_text
+    assert "Zażółć gęślą jaźń" in output_text
     assert "Jan Kowalski" not in output_text
     assert "44051401359" not in output_text
 

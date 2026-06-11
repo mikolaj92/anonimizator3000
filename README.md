@@ -69,7 +69,7 @@ Wynik zachowuje typ wejścia:
 - DOCX -> DOCX
 - tekst -> TXT
 
-PDF jest renderowany jako nowy PDF z wyekstrahowanym, zanonimizowanym tekstem. DOCX jest modyfikowany w pamięci przez `DocToText`; struktura akapitów i tabel zostaje, ale formatowanie w ramach jednego akapitu może się uprościć.
+PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych stronach, więc liczba stron i grafika dokumentu zostają zachowane, gdy zmienione fragmenty da się dopasować do tekstu strony. Jeśli fragmentu nie da się bezpiecznie odnaleźć, `DocToText` zamyka ryzyko wycieku przez zastąpienie tekstu tej strony. DOCX jest modyfikowany w pamięci przez `DocToText`; struktura akapitów i tabel zostaje, ale formatowanie w ramach jednego akapitu może się uprościć.
 
 ## Detekcja
 
