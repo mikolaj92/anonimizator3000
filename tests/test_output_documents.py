@@ -60,6 +60,14 @@ def _fitz_pdf_text(data: bytes) -> str:
     return "\n".join(page.get_text("text") or "" for page in pdf).replace("\xa0", " ")
 
 
+def _pypdf_text(data: bytes) -> str:
+    return "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(data)).pages)
+
+
+def _digits(text: str) -> str:
+    return "".join(character for character in text if character.isdigit())
+
+
 def test_processor_returns_anonymized_docx_document() -> None:
     processor = DocumentProcessor(max_text_chars=10_000)
 
@@ -100,13 +108,19 @@ def test_pdf_processor_redacts_broken_bank_account_city_and_street() -> None:
     data = _unicode_pdf_bytes(
         "Dane obejmują rachu\n"
         "41 1140 2004 0000 3102 1234 5678 oraz korespondencję z Łódźa "
-        "i przekazania kluczy w Wrocławu przy Piotrkowskiej."
+        "i przekazania kluczy w Wrocławu przy Piotrkowskiej.\n"
+        "PDF urwał etykietę: rachun\n1140 2004 0000 3102 1234 5678.\n"
+        "PDF urwał etykietę: rachune\n1090 2590 0000 0001 2345 6789."
     )
 
     result = processor("sample.pdf", PDF_MIME, data)
     output_text = _fitz_pdf_text(result.data)
+    pypdf_digits = _digits(_pypdf_text(result.data))
 
     assert "41 1140 2004 0000 3102 1234 5678" not in output_text
+    assert "41114020040000310212345678" not in pypdf_digits
+    assert "114020040000310212345678" not in pypdf_digits
+    assert "109025900000000123456789" not in pypdf_digits
     assert "Łódźa" not in output_text
     assert "Wrocławu" not in output_text
     assert "Piotrkowskiej" not in output_text
