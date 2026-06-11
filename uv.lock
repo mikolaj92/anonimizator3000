@@ -234,7 +234,7 @@ nvtx = [
 [[package]]
 name = "doctotext"
 version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/DocToText.git?branch=main#6a5b75af2c79e41cc2122c8237b5c685a58ed219" }
+source = { git = "https://github.com/mikolaj92/DocToText.git?branch=main#f1aa9dadcabe1b103ef46d043e4ae63a8a2e1dc1" }
 dependencies = [
     { name = "pymupdf" },
     { name = "pypdf" },
@@ -882,7 +882,7 @@ wheels = [
 [[package]]
 name = "posejdon"
 version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/Posejdon.git?branch=main#19783c339a8089051989321bb3e2393a5ade988e" }
+source = { git = "https://github.com/mikolaj92/Posejdon.git?branch=main#9240388e925a3a3ddd3093cd185ad4591b94cc64" }
 dependencies = [
     { name = "click" },
     { name = "httpx" },

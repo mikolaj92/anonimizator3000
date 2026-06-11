@@ -95,6 +95,23 @@ def test_pdf_processor_preserves_polish_text_and_page_count() -> None:
     assert "44051401359" not in output_text
 
 
+def test_pdf_processor_redacts_broken_bank_account_city_and_street() -> None:
+    processor = DocumentProcessor(max_text_chars=10_000)
+    data = _unicode_pdf_bytes(
+        "Dane obejmują rachu\n"
+        "41 1140 2004 0000 3102 1234 5678 oraz korespondencję z Łódźa "
+        "i przekazania kluczy w Wrocławu przy Piotrkowskiej."
+    )
+
+    result = processor("sample.pdf", PDF_MIME, data)
+    output_text = _fitz_pdf_text(result.data)
+
+    assert "41 1140 2004 0000 3102 1234 5678" not in output_text
+    assert "Łódźa" not in output_text
+    assert "Wrocławu" not in output_text
+    assert "Piotrkowskiej" not in output_text
+
+
 def test_text_input_returns_anonymized_txt_document() -> None:
     processor = DocumentProcessor(max_text_chars=10_000)
 
