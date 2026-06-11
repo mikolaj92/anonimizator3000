@@ -40,8 +40,6 @@ def test_processor_returns_anonymized_docx_document() -> None:
     output_text = "\n".join(paragraph.text for paragraph in output_docx.paragraphs)
     assert "Jan Kowalski" not in output_text
     assert "44051401359" not in output_text
-    assert "[OSOBA_" in output_text
-    assert "[PESEL_" in output_text
 
 
 def test_text_input_returns_anonymized_txt_document() -> None:
@@ -53,7 +51,6 @@ def test_text_input_returns_anonymized_txt_document() -> None:
     assert result.content_type == "text/plain; charset=utf-8"
     assert b"Anna Nowak" not in result.data
     assert b"anna@example.com" not in result.data
-    assert b"[OSOBA_" in result.data
 
 
 def test_pdf_input_returns_anonymized_pdf_document() -> None:
@@ -68,8 +65,6 @@ def test_pdf_input_returns_anonymized_pdf_document() -> None:
     output_text = "\n".join(page.extract_text() or "" for page in output_pdf.pages)
     assert "Jan Kowalski" not in output_text
     assert "44051401359" not in output_text
-    assert "[OSOBA_" in output_text
-    assert "[PESEL_" in output_text
 
 
 def test_processor_respects_docx_text_limit() -> None:

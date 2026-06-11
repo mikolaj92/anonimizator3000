@@ -41,14 +41,19 @@ class DocumentProcessor:
             )
 
         findings: Counter[str] = Counter()
-        anonymized_texts: list[str] = []
-        for text in texts:
-            if not text.strip():
-                anonymized_texts.append(text)
-                continue
-            anonymized = self._anonymizer.anonymize(text)
-            anonymized_texts.append(anonymized.text)
+        if hasattr(self._anonymizer, "anonymize_segments"):
+            anonymized = self._anonymizer.anonymize_segments(texts)
+            anonymized_texts = anonymized.texts
             findings.update(anonymized.findings)
+        else:
+            anonymized_texts = []
+            for text in texts:
+                if not text.strip():
+                    anonymized_texts.append(text)
+                    continue
+                anonymized = self._anonymizer.anonymize(text)
+                anonymized_texts.append(anonymized.text)
+                findings.update(anonymized.findings)
 
         document.apply_texts(anonymized_texts)
         result = document_to_bytes(document, filename)

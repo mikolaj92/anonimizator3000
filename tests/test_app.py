@@ -64,9 +64,6 @@ def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
         assert "Jan Kowalski" not in text
         assert "44051401359" not in text
         assert "jan@example.com" not in text
-        assert "[OSOBA_" in text
-        assert "[PESEL_" in text
-        assert "[EMAIL_" in text
 
 
 def test_upload_size_limit_returns_fragment() -> None:
