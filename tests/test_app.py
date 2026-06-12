@@ -21,6 +21,9 @@ def test_index_does_not_show_removed_header_copy() -> None:
         response = client.get("/")
 
     assert response.status_code == 200
+    assert 'aria-label="Informacje o prywatności"' in response.text
+    assert "Dokument nie jest zapisywany na dysku" in response.text
+    assert "wynik też wygasa" in response.text
     assert "Lokalnie. Bez zapisu." not in response.text
     assert "Anonimizator3000" not in response.text
     assert "in-memory" not in response.text
