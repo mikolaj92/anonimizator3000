@@ -1,6 +1,18 @@
 from dataclasses import dataclass
 from os import getenv
 
+REPLACEMENT_STYLES = ("mask", "labels")
+DEFAULT_REPLACEMENT_STYLE = "mask"
+
+
+def normalize_replacement_style(
+    value: str | None, default: str = DEFAULT_REPLACEMENT_STYLE
+) -> str:
+    if value is None:
+        return default
+    candidate = value.strip().lower()
+    return candidate if candidate in REPLACEMENT_STYLES else default
+
 
 def _get_int(name: str, default: int) -> int:
     raw = getenv(name)
@@ -36,6 +48,7 @@ class Settings:
     gliner_enabled: bool = False
     gliner_model: str = "urchade/gliner_multi_pii-v1"
     gliner_threshold: float = 0.45
+    replacement_style: str = DEFAULT_REPLACEMENT_STYLE
 
     @property
     def max_multipart_body_bytes(self) -> int:
@@ -62,4 +75,7 @@ def settings_from_env() -> Settings:
         gliner_enabled=_get_bool("ANON_GLINER_ENABLED", Settings.gliner_enabled),
         gliner_model=getenv("ANON_GLINER_MODEL", Settings.gliner_model),
         gliner_threshold=float(getenv("ANON_GLINER_THRESHOLD", Settings.gliner_threshold)),
+        replacement_style=normalize_replacement_style(
+            getenv("ANON_REPLACEMENT_STYLE"), Settings.replacement_style
+        ),
     )
