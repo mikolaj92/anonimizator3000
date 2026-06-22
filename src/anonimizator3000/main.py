@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -95,7 +96,7 @@ async def download_job(request: Request, job_id: str) -> Response:
     return Response(
         content=data,
         media_type=content_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _attachment_header(filename)},
     )
 
 
@@ -128,6 +129,16 @@ def _client_ip(request: Request, settings: Settings) -> str:
     if request.client and request.client.host:
         return request.client.host
     return "unknown"
+
+
+def _attachment_header(filename: str) -> str:
+    safe_name = filename.replace("\\", "/").rsplit("/", 1)[-1].strip() or "download"
+    fallback = "".join(
+        char if 32 <= ord(char) < 127 and char not in {'"', "\\", ";"} else "_"
+        for char in safe_name
+    ).strip(" .") or "download"
+    encoded = quote(safe_name, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
 def _settings(request: Request) -> Settings:

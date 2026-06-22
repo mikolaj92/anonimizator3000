@@ -26,8 +26,15 @@ async def read_multipart_document(
         raise UploadError("Wyślij plik przez formularz multipart.")
 
     content_length = request.headers.get("content-length")
-    if content_length is not None and int(content_length) > max_body_bytes:
-        raise UploadError("Upload jest za duży.", status_code=413)
+    if content_length is not None:
+        try:
+            content_length_value = int(content_length)
+        except ValueError as error:
+            raise UploadError("Nieprawidłowy nagłówek Content-Length.") from error
+        if content_length_value < 0:
+            raise UploadError("Nieprawidłowy nagłówek Content-Length.")
+        if content_length_value > max_body_bytes:
+            raise UploadError("Upload jest za duży.", status_code=413)
 
     body = await _read_limited_body(request, max_body_bytes)
     message = BytesParser(policy=policy.default).parsebytes(
