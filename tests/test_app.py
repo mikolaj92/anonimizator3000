@@ -30,6 +30,11 @@ def test_index_does_not_show_removed_header_copy() -> None:
     assert "Anonimizator3000" not in response.text
     assert "in-memory" not in response.text
     assert "Gotowy dokument pojawi się tutaj." not in response.text
+    assert "cdn.jsdelivr.net" not in response.text
+    assert "unpkg.com" not in response.text
+    assert "/static/basecoat/basecoat.css" in response.text
+    assert "/static/basecoat/basecoat.js" in response.text
+    assert "/static/htmx.min.js" in response.text
 
 
 def test_docx_upload_poll_and_download_flow_returns_docx() -> None:

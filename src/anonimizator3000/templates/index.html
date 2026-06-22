@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dokumenty</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.11/dist/basecoat.cdn.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='basecoat/basecoat.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/basecoat-css@0.3.11/dist/js/all.min.js" defer></script>
-    <script src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js" defer></script>
+    <script src="{{ url_for('static', path='basecoat/basecoat.js') }}" defer></script>
+    <script src="{{ url_for('static', path='htmx.min.js') }}" defer></script>
   </head>
   <body>
     <main class="shell">
