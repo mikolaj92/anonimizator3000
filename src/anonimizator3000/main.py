@@ -74,7 +74,7 @@ async def create_job(request: Request) -> HTMLResponse:
             data=upload.data,
         )
     except (UploadError, QueueRejected) as error:
-        return _error_fragment(request, str(error))
+        return _error_fragment(request, str(error), status_code=error.status_code)
 
     return _job_fragment(request, job)
 
@@ -83,7 +83,7 @@ async def create_job(request: Request) -> HTMLResponse:
 async def get_job(request: Request, job_id: str) -> HTMLResponse:
     job = await _queue(request).get(job_id)
     if job is None:
-        return _error_fragment(request, "Zadanie wygasło albo nie istnieje.")
+        return _error_fragment(request, "Zadanie wygasło albo nie istnieje.", status_code=404)
     return _job_fragment(request, job)
 
 
@@ -113,11 +113,12 @@ def _job_fragment(request: Request, job: JobSnapshot) -> HTMLResponse:
     )
 
 
-def _error_fragment(request: Request, message: str) -> HTMLResponse:
+def _error_fragment(request: Request, message: str, *, status_code: int = 400) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="partials/error.html",
         context={"message": message, "request": request},
+        status_code=status_code,
     )
 
 
