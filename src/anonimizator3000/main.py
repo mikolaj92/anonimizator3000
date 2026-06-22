@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from anonimizator3000.config import Settings, settings_from_env
+from anonimizator3000.config import Settings, normalize_replacement_style, settings_from_env
 from anonimizator3000.jobs import DocumentProcessingQueue, JobSnapshot, QueueRejected
 from anonimizator3000.processor import DocumentProcessor
 from anonimizator3000.upload import UploadError, read_multipart_document
@@ -71,6 +71,9 @@ async def create_job(request: Request) -> HTMLResponse:
             filename=upload.filename,
             content_type=upload.content_type,
             data=upload.data,
+            replacement_style=normalize_replacement_style(
+                upload.replacement_style, settings.replacement_style
+            ),
         )
     except (UploadError, QueueRejected) as error:
         return _error_fragment(request, str(error))

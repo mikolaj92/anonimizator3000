@@ -10,6 +10,7 @@ class UploadedDocument:
     filename: str
     content_type: str
     data: bytes
+    replacement_style: str | None = None
 
 
 class UploadError(ValueError):
@@ -37,23 +38,47 @@ async def read_multipart_document(
     if not message.is_multipart():
         raise UploadError("Nieprawidłowy multipart.")
 
+    document: UploadedDocument | None = None
+    replacement_style: str | None = None
     for part in message.iter_parts():
         disposition = part.get("content-disposition", "")
+        if "form-data" not in disposition:
+            continue
         name = part.get_param("name", header="content-disposition")
         filename = part.get_filename()
-        if "form-data" not in disposition or name != "document" or not filename:
+
+        if name == "style" and not filename:
+            replacement_style = _decode_text_field(part)
+            continue
+
+        if name != "document" or not filename:
             continue
 
         data = part.get_payload(decode=True) or b""
         if len(data) > max_file_bytes:
             raise UploadError("Plik jest za duży.", status_code=413)
-        return UploadedDocument(
+        document = UploadedDocument(
             filename=filename,
             content_type=part.get_content_type() or "application/octet-stream",
             data=data,
         )
 
-    raise UploadError("Brak pliku w polu document.")
+    if document is None:
+        raise UploadError("Brak pliku w polu document.")
+
+    return UploadedDocument(
+        filename=document.filename,
+        content_type=document.content_type,
+        data=document.data,
+        replacement_style=replacement_style,
+    )
+
+
+def _decode_text_field(part: object) -> str | None:
+    payload = part.get_payload(decode=True) if hasattr(part, "get_payload") else None
+    if not isinstance(payload, bytes):
+        return None
+    return payload.decode("utf-8", errors="replace").strip() or None
 
 
 async def _read_limited_body(request: Request, max_body_bytes: int) -> bytes:
