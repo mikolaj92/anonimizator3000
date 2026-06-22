@@ -21,9 +21,10 @@ UNICODE_FONT_CANDIDATES = (
 )
 
 
-def _docx_bytes(text: str) -> bytes:
+def _docx_bytes(*paragraphs: str) -> bytes:
     document = Document()
-    document.add_paragraph(text)
+    for text in paragraphs:
+        document.add_paragraph(text)
     output = BytesIO()
     document.save(output)
     return output.getvalue()
@@ -68,6 +69,42 @@ def _digits(text: str) -> str:
     return "".join(character for character in text if character.isdigit())
 
 
+FULL_DOCUMENT_PAGES = (
+    (
+        "Umowa dla Jan Kowalski oraz J. Kowalski. "
+        "Email jan.kowalski@example.com, rachunek 41 1140 2004 0000 3102 1234 5678. "
+        "Pojazd KR 7MZ18 i identyfikator host-waw-01. Dostęp z 83.21.144.9."
+    ),
+    (
+        "Materiały obejmują korespondencję z Łódźa i dokumenty dla lokalu przy Piotrkowskiej. "
+        "Dodatkowe ustalenia dotyczyły przekazania kluczy w Wrocławu przy ul. Długa 41/2. "
+        "Kontakt Anna Nowak przez anna.nowak@example.com."
+    ),
+)
+
+FULL_DOCUMENT_LEAKS = (
+    "Jan Kowalski",
+    "J. Kowalski",
+    "jan.kowalski@example.com",
+    "41 1140 2004 0000 3102 1234 5678",
+    "KR 7MZ18",
+    "host-waw-01",
+    "83.21.144.9",
+    "Łódźa",
+    "Piotrkowskiej",
+    "Wrocławu",
+    "Długa",
+    "Anna Nowak",
+    "anna.nowak@example.com",
+)
+
+
+def _assert_no_known_leaks(text: str) -> None:
+    leaks = [value for value in FULL_DOCUMENT_LEAKS if value in text]
+    assert leaks == []
+    assert "41114020040000310212345678" not in _digits(text)
+
+
 def test_processor_returns_anonymized_docx_document() -> None:
     processor = DocumentProcessor(max_text_chars=10_000)
 
@@ -83,6 +120,19 @@ def test_processor_returns_anonymized_docx_document() -> None:
     output_text = "\n".join(paragraph.text for paragraph in output_docx.paragraphs)
     assert "Jan Kowalski" not in output_text
     assert "44051401359" not in output_text
+
+
+def test_full_docx_document_regression_has_no_known_leaks() -> None:
+    processor = DocumentProcessor(max_text_chars=10_000)
+
+    result = processor("pelna-umowa.docx", DOCX_MIME, _docx_bytes(*FULL_DOCUMENT_PAGES))
+
+    assert result.filename == "pelna-umowa.anonimizowany.docx"
+    assert result.content_type == DOCX_MIME
+    assert result.data.startswith(b"PK")
+    output_docx = Document(BytesIO(result.data))
+    output_text = "\n".join(paragraph.text for paragraph in output_docx.paragraphs)
+    _assert_no_known_leaks(output_text)
 
 
 def test_pdf_processor_preserves_polish_text_and_page_count() -> None:
@@ -124,6 +174,21 @@ def test_pdf_processor_redacts_broken_bank_account_city_and_street() -> None:
     assert "Łódźa" not in output_text
     assert "Wrocławu" not in output_text
     assert "Piotrkowskiej" not in output_text
+
+
+def test_full_pdf_document_regression_has_no_known_leaks() -> None:
+    processor = DocumentProcessor(max_text_chars=10_000)
+    data = _unicode_pdf_bytes(*FULL_DOCUMENT_PAGES)
+
+    result = processor("pelna-umowa.pdf", PDF_MIME, data)
+    output_pdf = fitz.open(stream=result.data, filetype="pdf")
+    output_text = _fitz_pdf_text(result.data)
+
+    assert result.filename == "pelna-umowa.anonimizowany.pdf"
+    assert result.content_type == PDF_MIME
+    assert result.data.startswith(b"%PDF")
+    assert output_pdf.page_count == len(FULL_DOCUMENT_PAGES)
+    _assert_no_known_leaks(output_text)
 
 
 def test_text_input_returns_anonymized_txt_document() -> None:
