@@ -78,7 +78,7 @@ def test_upload_size_limit_returns_fragment() -> None:
             files={"document": ("big.txt", b"x" * 5_200_000, "text/plain")},
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 413
         assert "Odrzucono upload" in response.text
 
 
