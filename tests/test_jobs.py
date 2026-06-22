@@ -6,7 +6,9 @@ from anonimizator3000.jobs import DocumentProcessingQueue, QueueRejected
 from anonimizator3000.processor import ProcessedDocument
 
 
-def _processor(filename: str, content_type: str, data: bytes) -> ProcessedDocument:
+def _processor(
+    filename: str, content_type: str, data: bytes, replacement_style: str = "mask"
+) -> ProcessedDocument:
     return ProcessedDocument(
         filename="result.txt",
         content_type="text/plain; charset=utf-8",
@@ -64,6 +66,48 @@ async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_proc
         "process.claimed",
         "process.completed",
     ]
+
+
+@pytest.mark.asyncio
+async def test_queue_passes_replacement_style_to_processor() -> None:
+    seen: list[str] = []
+
+    def _capturing_processor(
+        filename: str, content_type: str, data: bytes, replacement_style: str = "mask"
+    ) -> ProcessedDocument:
+        seen.append(replacement_style)
+        return ProcessedDocument(
+            filename="result.txt",
+            content_type="text/plain; charset=utf-8",
+            data=data,
+            findings={},
+        )
+
+    queue = DocumentProcessingQueue(
+        processor=_capturing_processor,
+        max_size=10,
+        worker_count=1,
+        max_active_jobs_per_ip=10,
+        rate_limit_submissions=10,
+        rate_limit_window_seconds=60,
+        job_ttl_seconds=60,
+    )
+
+    job = await queue.submit(
+        ip="127.0.0.1",
+        filename="a.txt",
+        content_type="text/plain",
+        data=b"data",
+        replacement_style="labels",
+    )
+
+    await queue.start()
+    try:
+        await _wait_for_done(queue, job.id)
+    finally:
+        await queue.stop()
+
+    assert seen == ["labels"]
 
 
 @pytest.mark.asyncio

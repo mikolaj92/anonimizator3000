@@ -21,6 +21,7 @@ from fala import (
     RuntimeService,
 )
 
+from anonimizator3000.config import DEFAULT_REPLACEMENT_STYLE
 from anonimizator3000.processor import ProcessedDocument
 
 JobStatus = Literal["queued", "processing", "done", "failed"]
@@ -38,6 +39,7 @@ class _Job:
     source_filename: str | None
     source_content_type: str
     source_bytes: bytes | None
+    replacement_style: str = DEFAULT_REPLACEMENT_STYLE
     status: JobStatus = "queued"
     created_at: float = field(default_factory=time.monotonic)
     updated_at: float = field(default_factory=time.monotonic)
@@ -75,7 +77,7 @@ class DocumentProcessingQueue:
     def __init__(
         self,
         *,
-        processor: Callable[[str, str, bytes], ProcessedDocument],
+        processor: Callable[[str, str, bytes, str], ProcessedDocument],
         max_size: int,
         worker_count: int,
         max_active_jobs_per_ip: int,
@@ -131,7 +133,13 @@ class DocumentProcessingQueue:
         self._cleanup_task = None
 
     async def submit(
-        self, *, ip: str, filename: str, content_type: str, data: bytes
+        self,
+        *,
+        ip: str,
+        filename: str,
+        content_type: str,
+        data: bytes,
+        replacement_style: str = DEFAULT_REPLACEMENT_STYLE,
     ) -> JobSnapshot:
         now = time.monotonic()
         job = _Job(
@@ -140,6 +148,7 @@ class DocumentProcessingQueue:
             source_filename=filename,
             source_content_type=content_type,
             source_bytes=data,
+            replacement_style=replacement_style,
         )
 
         async with self._lock:
@@ -218,6 +227,7 @@ class DocumentProcessingQueue:
             await self._process_claim(claim.document_id)
 
     async def _process_claim(self, job_id: str) -> None:
+        replacement_style = DEFAULT_REPLACEMENT_STYLE
         async with self._lock:
             job = self._jobs.get(job_id)
             if job is None or job.source_bytes is None or job.source_filename is None:
@@ -230,13 +240,16 @@ class DocumentProcessingQueue:
                 filename = job.source_filename
                 content_type = job.source_content_type
                 data = job.source_bytes
+                replacement_style = job.replacement_style
 
         if filename is None or content_type is None or data is None:
             await self._record_failure(job_id, "Brak dokumentu źródłowego.")
             return
 
         try:
-            result = await asyncio.to_thread(self._processor, filename, content_type, data)
+            result = await asyncio.to_thread(
+                self._processor, filename, content_type, data, replacement_style
+            )
         except Exception as error:
             message = str(error)
             async with self._lock:
