@@ -1,11 +1,13 @@
 import time
 from io import BytesIO
 
+import pytest
 from doctotext import DOCX_MIME
 from docx import Document
 from fastapi.testclient import TestClient
 
-from anonimizator3000.main import app
+from anonimizator3000.main import _attachment_header, app
+from anonimizator3000.upload import UploadError, read_multipart_document
 
 
 def _docx_bytes(text: str) -> bytes:
@@ -78,3 +80,33 @@ def test_upload_size_limit_returns_fragment() -> None:
 
         assert response.status_code == 200
         assert "Odrzucono upload" in response.text
+
+
+@pytest.mark.asyncio
+async def test_invalid_content_length_returns_upload_error() -> None:
+    request = _FakeUploadRequest(content_length="not-a-number")
+
+    with pytest.raises(UploadError, match="Content-Length") as error:
+        await read_multipart_document(request, max_file_bytes=100, max_body_bytes=200)
+
+    assert error.value.status_code == 400
+
+
+def test_attachment_header_sanitizes_download_filename() -> None:
+    header = _attachment_header('..\\evil"\r\nx.docx')
+
+    assert "\r" not in header
+    assert "\n" not in header
+    assert 'filename="evil___x.docx"' in header
+    assert "filename*=UTF-8''evil%22%0D%0Ax.docx" in header
+
+
+class _FakeUploadRequest:
+    def __init__(self, *, content_length: str) -> None:
+        self.headers = {
+            "content-type": "multipart/form-data; boundary=x",
+            "content-length": content_length,
+        }
+
+    async def stream(self):
+        yield b""
