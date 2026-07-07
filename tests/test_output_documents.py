@@ -1,3 +1,4 @@
+import re
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
@@ -200,10 +201,60 @@ def test_comment_author_is_redacted_from_metadata() -> None:
 
     assert "Jan Kowalski" not in comments
     assert "Jan Kowalski" not in people
-    assert 'w:author="Autor 1"' in comments
-    assert 'w15:author="Autor 1"' in people
+    alias = re.search(r'w:author="(Autor \d+)"', comments).group(1)
+    assert f'w15:author="{alias}"' in people
     # The comment body text is still anonymized by the main pipeline.
     assert "Uwaga od recenzenta" in comments
+
+
+def _docx_with_doc_props(body: str, *, author: str, last_modified_by: str) -> bytes:
+    document = Document()
+    document.add_paragraph(body)
+    document.core_properties.author = author
+    document.core_properties.last_modified_by = last_modified_by
+    base = BytesIO()
+    document.save(base)
+
+    parts: dict[str, bytes] = {}
+    with ZipFile(base) as archive:
+        for name in archive.namelist():
+            parts[name] = archive.read(name)
+    parts["docProps/app.xml"] = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/'
+        'extended-properties">'
+        f"<Manager>{author}</Manager><Company>ACME Kancelaria</Company>"
+        "</Properties>"
+    ).encode()
+    output = BytesIO()
+    with ZipFile(output, "w") as out:
+        for name, data in parts.items():
+            out.writestr(name, data)
+    return output.getvalue()
+
+
+def test_document_author_metadata_is_redacted() -> None:
+    data = _docx_with_doc_props(
+        "Zwykły tekst umowy.",
+        author="Jan Kowalski",
+        last_modified_by="Anna Nowak",
+    )
+
+    result = _process("z-metadanymi.docx", DOCX_MIME, data)
+
+    with ZipFile(BytesIO(result.data)) as archive:
+        core = archive.read("docProps/core.xml").decode()
+        app = archive.read("docProps/app.xml").decode()
+
+    assert "Jan Kowalski" not in core
+    assert "Anna Nowak" not in core
+    assert "<dc:creator>Autor 1</dc:creator>" in core
+    assert "<cp:lastModifiedBy>Autor 2</cp:lastModifiedBy>" in core
+    # The manager is the same person as the creator, so shares the alias.
+    assert "Jan Kowalski" not in app
+    assert "<Manager>Autor 1</Manager>" in app
+    assert "ACME Kancelaria" not in app
+    assert "<Company></Company>" in app
 
 
 def test_processor_respects_docx_text_limit() -> None:

@@ -33,12 +33,19 @@ _STYLE_TO_KIND: dict[str, ReplacementKind] = {
 _DOCX_SUFFIX = ".docx"
 _PDF_SUFFIX = ".pdf"
 
-# Author identity lives in DOCX metadata attributes, not in the `w:t` text the
-# extractor sees: comment authors (word/comments.xml), tracked-change authors
-# (w:ins/w:del/... in the story parts), and word/people.xml. Redact those too.
+# Author identity lives in DOCX metadata, not in the `w:t` text the extractor
+# sees: comment authors (word/comments.xml), tracked-change authors
+# (w:ins/w:del/... in the story parts), word/people.xml, and the document-level
+# author fields in docProps. Redact all of those too.
 _WORD_XML_RE = re.compile(r"^word/.*\.xml$")
 _AUTHOR_RE = re.compile(r'(\b\w+:author=")([^"]*)(")')
 _INITIALS_RE = re.compile(r'(\b\w+:initials=")([^"]*)(")')
+_CORE_PROPS_PART = "docProps/core.xml"
+_APP_PROPS_PART = "docProps/app.xml"
+_CREATOR_RE = re.compile(r"(<dc:creator[^>]*>)([^<]*)(</dc:creator>)")
+_LAST_MODIFIED_RE = re.compile(r"(<cp:lastModifiedBy[^>]*>)([^<]*)(</cp:lastModifiedBy>)")
+_MANAGER_RE = re.compile(r"(<Manager[^>]*>)([^<]*)(</Manager>)")
+_COMPANY_RE = re.compile(r"(<Company[^>]*>)([^<]*)(</Company>)")
 
 
 class SegmentAnonymizer(Protocol):
@@ -155,23 +162,36 @@ def _redact_author_metadata(docx_bytes: bytes) -> tuple[bytes, int]:
 
     aliases: dict[str, str] = {}
 
-    def _alias(match: re.Match[str]) -> str:
-        original = match.group(2)
+    def _pseudonym(original: str) -> str:
         if original == "":
-            return match.group(0)
+            return ""
         alias = aliases.get(original)
         if alias is None:
             alias = f"Autor {len(aliases) + 1}"
             aliases[original] = alias
-        return f"{match.group(1)}{alias}{match.group(3)}"
+        return alias
+
+    def _replace_value(match: re.Match[str]) -> str:
+        return f"{match.group(1)}{_pseudonym(match.group(2))}{match.group(3)}"
+
+    def _clear_value(match: re.Match[str]) -> str:
+        return f"{match.group(1)}{match.group(3)}"
 
     changed: dict[str, bytes] = {}
     for name, data in parts.items():
-        if not _WORD_XML_RE.match(name):
+        if not (_WORD_XML_RE.match(name) or name in (_CORE_PROPS_PART, _APP_PROPS_PART)):
             continue
         text = data.decode("utf-8")
-        updated = _AUTHOR_RE.sub(_alias, text)
-        updated = _INITIALS_RE.sub(lambda match: f"{match.group(1)}{match.group(3)}", updated)
+        updated = text
+        if _WORD_XML_RE.match(name):
+            updated = _AUTHOR_RE.sub(_replace_value, updated)
+            updated = _INITIALS_RE.sub(_clear_value, updated)
+        elif name == _CORE_PROPS_PART:
+            updated = _CREATOR_RE.sub(_replace_value, updated)
+            updated = _LAST_MODIFIED_RE.sub(_replace_value, updated)
+        elif name == _APP_PROPS_PART:
+            updated = _MANAGER_RE.sub(_replace_value, updated)
+            updated = _COMPANY_RE.sub(_clear_value, updated)
         if updated != text:
             changed[name] = updated.encode("utf-8")
 
