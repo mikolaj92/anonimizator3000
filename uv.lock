@@ -920,7 +920,7 @@ wheels = [
 [[package]]
 name = "posejdon"
 version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/Posejdon.git?branch=main#32ae901df5f80f0a0938a0a03bd5cac5cf2b6e93" }
+source = { git = "https://github.com/mikolaj92/Posejdon.git?branch=main#818b828171878f415f90da5c0eef3065fc3eae4a" }
 dependencies = [
     { name = "click" },
     { name = "httpx" },

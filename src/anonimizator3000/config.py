@@ -45,7 +45,7 @@ class Settings:
     rate_limit_window_seconds: int = 600
     job_ttl_seconds: int = 900
     trust_proxy_headers: bool = False
-    gliner_enabled: bool = False
+    gliner_enabled: bool = True
     gliner_model: str = "urchade/gliner_multi_pii-v1"
     gliner_threshold: float = 0.45
     replacement_style: str = DEFAULT_REPLACEMENT_STYLE
