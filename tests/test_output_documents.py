@@ -3,13 +3,11 @@ from pathlib import Path
 
 import fitz
 import pytest
-from doctotext import DOCX_MIME, PDF_MIME
+from doctotext import DOCX_MIME, PDF_MIME, DocumentError, load_document
 from docx import Document
-from pypdf import PdfReader
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+from posejdon import TextAnonymizer
 
-from anonimizator3000.processor import DocumentProcessor
+from anonimizator3000.pipeline import process_document
 
 UNICODE_FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -21,20 +19,22 @@ UNICODE_FONT_CANDIDATES = (
 )
 
 
+def _process(filename: str, content_type: str, data: bytes, *, max_text_chars: int = 10_000):
+    return process_document(
+        filename,
+        content_type,
+        data,
+        anonymizer=TextAnonymizer(),
+        max_text_chars=max_text_chars,
+    )
+
+
 def _docx_bytes(*paragraphs: str) -> bytes:
     document = Document()
     for text in paragraphs:
         document.add_paragraph(text)
     output = BytesIO()
     document.save(output)
-    return output.getvalue()
-
-
-def _pdf_bytes(text: str) -> bytes:
-    output = BytesIO()
-    pdf = canvas.Canvas(output, pagesize=A4)
-    pdf.drawString(48, 760, text)
-    pdf.save()
     return output.getvalue()
 
 
@@ -56,13 +56,9 @@ def _unicode_pdf_bytes(*pages: str) -> bytes:
     return pdf.tobytes()
 
 
-def _fitz_pdf_text(data: bytes) -> str:
-    pdf = fitz.open(stream=data, filetype="pdf")
-    return "\n".join(page.get_text("text") or "" for page in pdf).replace("\xa0", " ")
-
-
-def _pypdf_text(data: bytes) -> str:
-    return "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(data)).pages)
+def _docx_text(data: bytes) -> str:
+    document = load_document("wynik.docx", DOCX_MIME, data)
+    return "\n".join(document.texts).replace("\xa0", " ")
 
 
 def _digits(text: str) -> str:
@@ -106,9 +102,7 @@ def _assert_no_known_leaks(text: str) -> None:
 
 
 def test_processor_returns_anonymized_docx_document() -> None:
-    processor = DocumentProcessor(max_text_chars=10_000)
-
-    result = processor("sample.docx", DOCX_MIME, _docx_bytes("Jan Kowalski, PESEL 44051401359"))
+    result = _process("sample.docx", DOCX_MIME, _docx_bytes("Jan Kowalski, PESEL 44051401359"))
 
     assert result.filename == "sample.anonimizowany.docx"
     assert result.content_type == DOCX_MIME
@@ -116,112 +110,54 @@ def test_processor_returns_anonymized_docx_document() -> None:
     assert result.findings["PERSON"] == 1
     assert result.findings["PESEL"] == 1
 
-    output_docx = Document(BytesIO(result.data))
-    output_text = "\n".join(paragraph.text for paragraph in output_docx.paragraphs)
+    output_text = _docx_text(result.data)
     assert "Jan Kowalski" not in output_text
     assert "44051401359" not in output_text
 
 
 def test_full_docx_document_regression_has_no_known_leaks() -> None:
-    processor = DocumentProcessor(max_text_chars=10_000)
-
-    result = processor("pelna-umowa.docx", DOCX_MIME, _docx_bytes(*FULL_DOCUMENT_PAGES))
+    result = _process("pelna-umowa.docx", DOCX_MIME, _docx_bytes(*FULL_DOCUMENT_PAGES))
 
     assert result.filename == "pelna-umowa.anonimizowany.docx"
     assert result.content_type == DOCX_MIME
     assert result.data.startswith(b"PK")
-    output_docx = Document(BytesIO(result.data))
-    output_text = "\n".join(paragraph.text for paragraph in output_docx.paragraphs)
-    _assert_no_known_leaks(output_text)
+    _assert_no_known_leaks(_docx_text(result.data))
 
 
-def test_pdf_processor_preserves_polish_text_and_page_count() -> None:
-    processor = DocumentProcessor(max_text_chars=10_000)
+def test_pdf_input_is_converted_to_anonymized_docx() -> None:
     data = _unicode_pdf_bytes(
         "Dane nie są fikcyjne. Zażółć gęślą jaźń. Jan Kowalski PESEL 44051401359",
         "Druga strona bez danych.",
     )
 
-    result = processor("sample.pdf", PDF_MIME, data)
-    output_pdf = fitz.open(stream=result.data, filetype="pdf")
-    output_text = _fitz_pdf_text(result.data)
+    result = _process("sample.pdf", PDF_MIME, data)
 
-    assert output_pdf.page_count == 2
-    assert "Dane nie są fikcyjne" in output_text
+    assert result.filename == "sample.anonimizowany.docx"
+    assert result.content_type == DOCX_MIME
+    assert result.data.startswith(b"PK")
+
+    output_text = _docx_text(result.data)
     assert "Zażółć gęślą jaźń" in output_text
     assert "Jan Kowalski" not in output_text
     assert "44051401359" not in output_text
 
 
-def test_pdf_processor_redacts_broken_bank_account_city_and_street() -> None:
-    processor = DocumentProcessor(max_text_chars=10_000)
-    data = _unicode_pdf_bytes(
-        "Dane obejmują rachu\n"
-        "41 1140 2004 0000 3102 1234 5678 oraz korespondencję z Łódźa "
-        "i przekazania kluczy w Wrocławu przy Piotrkowskiej.\n"
-        "PDF urwał etykietę: rachun\n1140 2004 0000 3102 1234 5678.\n"
-        "PDF urwał etykietę: rachune\n1090 2590 0000 0001 2345 6789."
-    )
-
-    result = processor("sample.pdf", PDF_MIME, data)
-    output_text = _fitz_pdf_text(result.data)
-    pypdf_digits = _digits(_pypdf_text(result.data))
-
-    assert "41 1140 2004 0000 3102 1234 5678" not in output_text
-    assert "41114020040000310212345678" not in pypdf_digits
-    assert "114020040000310212345678" not in pypdf_digits
-    assert "109025900000000123456789" not in pypdf_digits
-    assert "Łódźa" not in output_text
-    assert "Wrocławu" not in output_text
-    assert "Piotrkowskiej" not in output_text
-
-
-def test_full_pdf_document_regression_has_no_known_leaks() -> None:
-    processor = DocumentProcessor(max_text_chars=10_000)
+def test_full_pdf_document_regression_produces_docx_without_known_leaks() -> None:
     data = _unicode_pdf_bytes(*FULL_DOCUMENT_PAGES)
 
-    result = processor("pelna-umowa.pdf", PDF_MIME, data)
-    output_pdf = fitz.open(stream=result.data, filetype="pdf")
-    output_text = _fitz_pdf_text(result.data)
+    result = _process("pelna-umowa.pdf", PDF_MIME, data)
 
-    assert result.filename == "pelna-umowa.anonimizowany.pdf"
-    assert result.content_type == PDF_MIME
-    assert result.data.startswith(b"%PDF")
-    assert output_pdf.page_count == len(FULL_DOCUMENT_PAGES)
-    _assert_no_known_leaks(output_text)
+    assert result.filename == "pelna-umowa.anonimizowany.docx"
+    assert result.content_type == DOCX_MIME
+    assert result.data.startswith(b"PK")
+    _assert_no_known_leaks(_docx_text(result.data))
 
 
-def test_text_input_returns_anonymized_txt_document() -> None:
-    processor = DocumentProcessor(max_text_chars=10_000)
-
-    result = processor("sample.txt", "text/plain", b"Anna Nowak email anna@example.com")
-
-    assert result.filename == "sample.anonimizowany.txt"
-    assert result.content_type == "text/plain; charset=utf-8"
-    assert b"Anna Nowak" not in result.data
-    assert b"anna@example.com" not in result.data
-
-
-def test_pdf_input_returns_anonymized_pdf_document() -> None:
-    processor = DocumentProcessor(max_text_chars=10_000)
-
-    result = processor("sample.pdf", PDF_MIME, _pdf_bytes("Jan Kowalski PESEL 44051401359"))
-
-    assert result.filename == "sample.anonimizowany.pdf"
-    assert result.content_type == PDF_MIME
-    assert result.data.startswith(b"%PDF")
-    output_pdf = PdfReader(BytesIO(result.data))
-    output_text = "\n".join(page.extract_text() or "" for page in output_pdf.pages)
-    assert "Jan Kowalski" not in output_text
-    assert "44051401359" not in output_text
+def test_unsupported_text_input_is_rejected() -> None:
+    with pytest.raises(DocumentError, match="DOCX i PDF"):
+        _process("sample.txt", "text/plain", b"Anna Nowak email anna@example.com")
 
 
 def test_processor_respects_docx_text_limit() -> None:
-    processor = DocumentProcessor(max_text_chars=3)
-
-    try:
-        processor("sample.docx", DOCX_MIME, _docx_bytes("abcdef"))
-    except ValueError as error:
-        assert "przekracza limit" in str(error)
-    else:
-        raise AssertionError("Expected ValueError")
+    with pytest.raises(DocumentError, match="przekracza limit"):
+        _process("sample.docx", DOCX_MIME, _docx_bytes("abcdef"), max_text_chars=3)

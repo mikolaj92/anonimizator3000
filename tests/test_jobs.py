@@ -1,26 +1,59 @@
 import asyncio
+from io import BytesIO
 
 import pytest
+from doctotext import DOCX_MIME
+from docx import Document
+from posejdon import ReplacementKind
 
 from anonimizator3000.jobs import DocumentProcessingQueue, QueueRejected
-from anonimizator3000.processor import ProcessedDocument
 
 
-def _processor(
-    filename: str, content_type: str, data: bytes, replacement_style: str = "mask"
-) -> ProcessedDocument:
-    return ProcessedDocument(
-        filename="result.txt",
-        content_type="text/plain; charset=utf-8",
-        data=data.decode().replace("secret", "<REDACTED>").encode(),
-        findings={"TEST": 1},
+def _docx_bytes(text: str) -> bytes:
+    document = Document()
+    document.add_paragraph(text)
+    output = BytesIO()
+    document.save(output)
+    return output.getvalue()
+
+
+class _FakeResult:
+    def __init__(self, texts: list[str], findings: list[str]) -> None:
+        self.texts = texts
+        self.findings = findings
+
+
+class _FakeAnonymizer:
+    def __init__(self) -> None:
+        self.seen_styles: list[ReplacementKind] = []
+
+    def anonymize_segments(self, texts: list[str], *, replacement_style: ReplacementKind):
+        self.seen_styles.append(replacement_style)
+        return _FakeResult(
+            [text.replace("secret", "<REDACTED>") for text in texts],
+            ["TEST"],
+        )
+
+
+def _make_queue(anonymizer: _FakeAnonymizer, **overrides) -> DocumentProcessingQueue:
+    kwargs = dict(
+        anonymizer=anonymizer,
+        max_text_chars=250_000,
+        max_size=10,
+        worker_count=1,
+        max_active_jobs_per_ip=10,
+        rate_limit_submissions=10,
+        rate_limit_window_seconds=60,
+        job_ttl_seconds=60,
     )
+    kwargs.update(overrides)
+    return DocumentProcessingQueue(**kwargs)
 
 
 async def _wait_for_done(queue: DocumentProcessingQueue, job_id: str):
-    for _ in range(50):
+    for _ in range(100):
         snapshot = await queue.get(job_id)
-        if snapshot and snapshot.status == "done":
+        if snapshot and snapshot.status in {"done", "failed"}:
             return snapshot
         await asyncio.sleep(0.02)
     raise AssertionError("Job did not finish")
@@ -28,22 +61,20 @@ async def _wait_for_done(queue: DocumentProcessingQueue, job_id: str):
 
 @pytest.mark.asyncio
 async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing() -> None:
-    queue = DocumentProcessingQueue(
-        processor=_processor,
-        max_size=10,
-        worker_count=1,
-        max_active_jobs_per_ip=1,
-        rate_limit_submissions=10,
-        rate_limit_window_seconds=60,
-        job_ttl_seconds=60,
-    )
+    queue = _make_queue(_FakeAnonymizer(), max_active_jobs_per_ip=1)
 
     first = await queue.submit(
-        ip="127.0.0.1", filename="a.txt", content_type="text/plain", data=b"secret"
+        ip="127.0.0.1",
+        filename="a.docx",
+        content_type=DOCX_MIME,
+        data=_docx_bytes("secret text"),
     )
     with pytest.raises(QueueRejected):
         await queue.submit(
-            ip="127.0.0.1", filename="b.txt", content_type="text/plain", data=b"secret"
+            ip="127.0.0.1",
+            filename="b.docx",
+            content_type=DOCX_MIME,
+            data=_docx_bytes("secret text"),
         )
 
     await queue.start()
@@ -52,77 +83,52 @@ async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_proc
     finally:
         await queue.stop()
 
-    assert done.result_filename == "result.txt"
-    assert done.result_size == len(b"<REDACTED>")
+    assert done.status == "done"
+    assert done.result_content_type == DOCX_MIME
     assert done.has_source_bytes is False
+    assert done.findings == {"TEST": 1}
 
     document = await queue.result_document(first.id)
-    assert document == ("result.txt", "text/plain; charset=utf-8", b"<REDACTED>")
-
-    event_types = [event.type for event in await queue.events(first.id)]
-    assert event_types == [
-        "document.initialized",
-        "process.queued",
-        "process.claimed",
-        "process.completed",
-    ]
+    assert document is not None
+    _, content_type, data = document
+    assert content_type == DOCX_MIME
+    text = "\n".join(p.text for p in Document(BytesIO(data)).paragraphs)
+    assert "secret" not in text
+    assert "<REDACTED>" in text
 
 
 @pytest.mark.asyncio
-async def test_queue_passes_replacement_style_to_processor() -> None:
-    seen: list[str] = []
-
-    def _capturing_processor(
-        filename: str, content_type: str, data: bytes, replacement_style: str = "mask"
-    ) -> ProcessedDocument:
-        seen.append(replacement_style)
-        return ProcessedDocument(
-            filename="result.txt",
-            content_type="text/plain; charset=utf-8",
-            data=data,
-            findings={},
-        )
-
-    queue = DocumentProcessingQueue(
-        processor=_capturing_processor,
-        max_size=10,
-        worker_count=1,
-        max_active_jobs_per_ip=10,
-        rate_limit_submissions=10,
-        rate_limit_window_seconds=60,
-        job_ttl_seconds=60,
-    )
+async def test_queue_passes_replacement_style_to_anonymizer() -> None:
+    anonymizer = _FakeAnonymizer()
+    queue = _make_queue(anonymizer)
 
     job = await queue.submit(
         ip="127.0.0.1",
-        filename="a.txt",
-        content_type="text/plain",
-        data=b"data",
+        filename="a.docx",
+        content_type=DOCX_MIME,
+        data=_docx_bytes("secret text"),
         replacement_style="labels",
     )
 
     await queue.start()
     try:
-        await _wait_for_done(queue, job.id)
+        done = await _wait_for_done(queue, job.id)
     finally:
         await queue.stop()
 
-    assert seen == ["labels"]
+    assert done.status == "done"
+    assert anonymizer.seen_styles == [ReplacementKind.CATEGORY_PLACEHOLDER]
 
 
 @pytest.mark.asyncio
 async def test_queue_rate_limits_submissions_per_ip() -> None:
-    queue = DocumentProcessingQueue(
-        processor=_processor,
-        max_size=10,
-        worker_count=1,
-        max_active_jobs_per_ip=10,
-        rate_limit_submissions=1,
-        rate_limit_window_seconds=60,
-        job_ttl_seconds=60,
+    queue = _make_queue(_FakeAnonymizer(), rate_limit_submissions=1)
+
+    await queue.submit(
+        ip="127.0.0.1", filename="a.docx", content_type=DOCX_MIME, data=_docx_bytes("a")
     )
 
-    await queue.submit(ip="127.0.0.1", filename="a.txt", content_type="text/plain", data=b"a")
-
     with pytest.raises(QueueRejected, match="Limit uploadów"):
-        await queue.submit(ip="127.0.0.1", filename="b.txt", content_type="text/plain", data=b"b")
+        await queue.submit(
+            ip="127.0.0.1", filename="b.docx", content_type=DOCX_MIME, data=_docx_bytes("b")
+        )

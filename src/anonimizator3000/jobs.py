@@ -2,34 +2,15 @@ import asyncio
 import contextlib
 import time
 from collections import defaultdict, deque
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 from uuid import uuid4
 
-from fala import (
-    AdapterSpec,
-    InMemoryStateStore,
-    PipelineRegistry,
-    PipelineScheduler,
-    PipelineSpec,
-    ProcessEvent,
-    ProcessOutput,
-    ProcessSpec,
-    ProcessStatus,
-    RetryPolicy,
-    RuntimeService,
-)
-
 from anonimizator3000.config import DEFAULT_REPLACEMENT_STYLE
-from anonimizator3000.processor import ProcessedDocument
+from anonimizator3000.pipeline import process_document
+from anonimizator3000.steps import SegmentAnonymizer
 
 JobStatus = Literal["queued", "processing", "done", "failed"]
-
-PIPELINE_ID = "document_anonymization"
-PROCESS_ID = "anonymize_document"
-QUEUE_NAME = "documents.anonymize"
-RUN_ID = "anonimizator3000"
 
 
 @dataclass
@@ -77,7 +58,8 @@ class DocumentProcessingQueue:
     def __init__(
         self,
         *,
-        processor: Callable[[str, str, bytes, str], ProcessedDocument],
+        anonymizer: SegmentAnonymizer,
+        max_text_chars: int,
         max_size: int,
         worker_count: int,
         max_active_jobs_per_ip: int,
@@ -85,7 +67,8 @@ class DocumentProcessingQueue:
         rate_limit_window_seconds: int,
         job_ttl_seconds: int,
     ) -> None:
-        self._processor = processor
+        self._anonymizer = anonymizer
+        self._max_text_chars = max_text_chars
         self._max_size = max_size
         self._worker_count = worker_count
         self._max_active_jobs_per_ip = max_active_jobs_per_ip
@@ -95,16 +78,10 @@ class DocumentProcessingQueue:
         self._jobs: dict[str, _Job] = {}
         self._submissions: dict[str, deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
+        self._pending: asyncio.Queue[str] = asyncio.Queue()
         self._workers: list[asyncio.Task] = []
         self._cleanup_task: asyncio.Task | None = None
         self._stopping = asyncio.Event()
-
-        self._pipeline = _document_pipeline()
-        self._store = InMemoryStateStore()
-        self._runtime = RuntimeService(
-            registry=PipelineRegistry([self._pipeline]),
-            store=self._store,
-        )
 
     async def start(self) -> None:
         if self._workers:
@@ -112,7 +89,7 @@ class DocumentProcessingQueue:
         self._stopping.clear()
         self._workers = [
             asyncio.create_task(
-                self._worker_loop(worker_id=f"anonimizator-worker-{index}"),
+                self._worker_loop(),
                 name=f"anonimizator-worker-{index}",
             )
             for index in range(self._worker_count)
@@ -160,47 +137,24 @@ class DocumentProcessingQueue:
 
             self._jobs[job.id] = job
             self._submissions[ip].append(now)
+            snapshot = self._snapshot(job)
 
-        try:
-            await self._runtime.initialize_document(
-                run_id=RUN_ID,
-                document_id=job.id,
-                pipeline_id=PIPELINE_ID,
-                values={
-                    "filename": filename,
-                    "content_type": content_type,
-                    "size": len(data),
-                    "client_ip": ip,
-                },
-            )
-        except Exception:
-            async with self._lock:
-                self._jobs.pop(job.id, None)
-                with contextlib.suppress(ValueError):
-                    self._submissions[ip].remove(now)
-            raise
-
-        snapshot = await self.get(job.id)
-        if snapshot is None:
-            raise RuntimeError("Zadanie nie zostało utworzone.")
+        await self._pending.put(job.id)
         return snapshot
 
     async def get(self, job_id: str) -> JobSnapshot | None:
-        status = await self._job_status(job_id)
         async with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
                 return None
-            self._sync_local_status(job, status)
-            return self._snapshot(job, status)
+            return self._snapshot(job)
 
     async def result_document(self, job_id: str) -> tuple[str, str, bytes] | None:
-        status = await self._job_status(job_id)
         async with self._lock:
             job = self._jobs.get(job_id)
             if (
                 not job
-                or status != "done"
+                or job.status != "done"
                 or job.result_filename is None
                 or job.result_content_type is None
                 or job.result_bytes is None
@@ -208,59 +162,49 @@ class DocumentProcessingQueue:
                 return None
             return job.result_filename, job.result_content_type, job.result_bytes
 
-    async def events(self, job_id: str) -> list[ProcessEvent]:
-        return await self._store.list_events(run_id=RUN_ID, document_id=job_id)
-
-    async def _worker_loop(self, *, worker_id: str) -> None:
+    async def _worker_loop(self) -> None:
         while not self._stopping.is_set():
-            claim = await self._runtime.claim_next(
-                run_id=RUN_ID,
-                pipeline_id=PIPELINE_ID,
-                worker_id=worker_id,
-                process_id=PROCESS_ID,
-                adapter_kind="queue",
-                lease_seconds=300,
-            )
-            if claim is None:
-                await asyncio.sleep(0.05)
+            try:
+                job_id = await asyncio.wait_for(self._pending.get(), timeout=0.5)
+            except TimeoutError:
                 continue
-            await self._process_claim(claim.document_id)
+            try:
+                await self._process_job(job_id)
+            finally:
+                self._pending.task_done()
 
-    async def _process_claim(self, job_id: str) -> None:
-        replacement_style = DEFAULT_REPLACEMENT_STYLE
+    async def _process_job(self, job_id: str) -> None:
         async with self._lock:
             job = self._jobs.get(job_id)
             if job is None or job.source_bytes is None or job.source_filename is None:
-                filename = None
-                content_type = None
-                data = None
-            else:
-                job.status = "processing"
-                job.updated_at = time.monotonic()
-                filename = job.source_filename
-                content_type = job.source_content_type
-                data = job.source_bytes
-                replacement_style = job.replacement_style
-
-        if filename is None or content_type is None or data is None:
-            await self._record_failure(job_id, "Brak dokumentu źródłowego.")
-            return
+                return
+            job.status = "processing"
+            job.updated_at = time.monotonic()
+            filename = job.source_filename
+            content_type = job.source_content_type
+            data = job.source_bytes
+            replacement_style = job.replacement_style
 
         try:
             result = await asyncio.to_thread(
-                self._processor, filename, content_type, data, replacement_style
+                process_document,
+                filename,
+                content_type,
+                data,
+                anonymizer=self._anonymizer,
+                max_text_chars=self._max_text_chars,
+                replacement_style=replacement_style,
+                run_id=job_id,
             )
         except Exception as error:
-            message = str(error)
             async with self._lock:
                 job = self._jobs.get(job_id)
                 if job:
                     job.status = "failed"
-                    job.error = message
+                    job.error = str(error)
                     job.source_bytes = None
                     job.source_filename = None
                     job.updated_at = time.monotonic()
-            await self._record_failure(job_id, message)
             return
 
         async with self._lock:
@@ -272,40 +216,8 @@ class DocumentProcessingQueue:
                 job.findings = result.findings
                 job.source_bytes = None
                 job.source_filename = None
-                job.updated_at = time.monotonic()
-
-        await self._store.put_output(
-            run_id=RUN_ID,
-            document_id=job_id,
-            process_id=PROCESS_ID,
-            output=ProcessOutput(
-                values={
-                    "filename": result.filename,
-                    "content_type": result.content_type,
-                    "size": len(result.data),
-                    "findings": result.findings,
-                }
-            ),
-        )
-        await self._runtime.schedule_document(
-            run_id=RUN_ID,
-            document_id=job_id,
-            pipeline_id=PIPELINE_ID,
-        )
-
-        async with self._lock:
-            job = self._jobs.get(job_id)
-            if job:
                 job.status = "done"
                 job.updated_at = time.monotonic()
-
-    async def _record_failure(self, job_id: str, message: str) -> None:
-        await PipelineScheduler(self._pipeline, self._store).record_process_failure(
-            run_id=RUN_ID,
-            document_id=job_id,
-            process_id=PROCESS_ID,
-            reason=message,
-        )
 
     async def _cleanup_loop(self) -> None:
         while not self._stopping.is_set():
@@ -328,29 +240,25 @@ class DocumentProcessingQueue:
                 if not timestamps:
                     del self._submissions[ip]
 
-    async def _job_status(self, job_id: str) -> JobStatus:
-        statuses = await self._store.list_statuses(run_id=RUN_ID, document_id=job_id)
-        return _job_status(statuses.get(PROCESS_ID))
-
-    def _snapshot(self, job: _Job, status: JobStatus) -> JobSnapshot:
+    def _snapshot(self, job: _Job) -> JobSnapshot:
         now = time.monotonic()
         return JobSnapshot(
             id=job.id,
-            status=status,
+            status=job.status,
             created_at=job.created_at,
             updated_at=job.updated_at,
             elapsed_seconds=(
                 job.updated_at - job.created_at
-                if status in {"done", "failed"}
+                if job.status in {"done", "failed"}
                 else now - job.created_at
             ),
-            progress_percent=_progress_percent(status),
+            progress_percent=_progress_percent(job.status),
             result_filename=job.result_filename,
             result_content_type=job.result_content_type,
             result_size=len(job.result_bytes) if job.result_bytes is not None else None,
             findings=dict(job.findings),
             error=job.error,
-            queue_position=self._queue_position(job.id) if status == "queued" else None,
+            queue_position=self._queue_position(job.id) if job.status == "queued" else None,
             has_source_bytes=job.source_bytes is not None,
         )
 
@@ -363,12 +271,6 @@ class DocumentProcessingQueue:
         if job_id not in queued_ids:
             return None
         return queued_ids.index(job_id) + 1
-
-    def _sync_local_status(self, job: _Job, status: JobStatus) -> None:
-        if job.status == status:
-            return
-        job.status = status
-        job.updated_at = time.monotonic()
 
     def _enforce_rate_limit(self, ip: str, now: float) -> None:
         timestamps = self._submissions[ip]
@@ -392,36 +294,8 @@ class DocumentProcessingQueue:
             timestamps.popleft()
 
 
-def _document_pipeline() -> PipelineSpec:
-    return PipelineSpec(
-        id=PIPELINE_ID,
-        title="Document anonymization",
-        steps=[
-            ProcessSpec(
-                id=PROCESS_ID,
-                title="Anonymize document",
-                adapter=AdapterSpec(kind="queue", queue=QUEUE_NAME),
-                timeout_seconds=300,
-                retry=RetryPolicy(max_attempts=1),
-            )
-        ],
-    )
-
-
 def _new_job_id() -> str:
     return f"job_{time.time_ns()}_{uuid4().hex[:12]}"
-
-
-def _job_status(status: ProcessStatus | None) -> JobStatus:
-    match status:
-        case ProcessStatus.running:
-            return "processing"
-        case ProcessStatus.completed:
-            return "done"
-        case ProcessStatus.failed | ProcessStatus.cancelled:
-            return "failed"
-        case _:
-            return "queued"
 
 
 def _progress_percent(status: JobStatus) -> int:

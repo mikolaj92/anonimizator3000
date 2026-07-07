@@ -1,6 +1,9 @@
 import time
+from io import BytesIO
 
 import pytest
+from doctotext import DOCX_MIME, load_document
+from docx import Document
 from fastapi.testclient import TestClient
 
 from anonimizator3000.config import (
@@ -10,7 +13,15 @@ from anonimizator3000.config import (
 )
 from anonimizator3000.main import app
 
-_SAMPLE = b"Jan Kowalski ma PESEL 44051401359."
+_SAMPLE = "Jan Kowalski ma PESEL 44051401359."
+
+
+def _docx_bytes(text: str) -> bytes:
+    document = Document()
+    document.add_paragraph(text)
+    output = BytesIO()
+    document.save(output)
+    return output.getvalue()
 
 
 def test_normalize_replacement_style_accepts_known_values() -> None:
@@ -63,7 +74,7 @@ def test_default_style_produces_fixed_mask() -> None:
 
 
 def _run_upload(style: str | None) -> str:
-    files = {"document": ("sample.txt", _SAMPLE, "text/plain")}
+    files = {"document": ("sample.docx", _docx_bytes(_SAMPLE), DOCX_MIME)}
     data = {"style": style} if style is not None else None
     with TestClient(app) as client:
         response = client.post("/jobs", files=files, data=data)
@@ -81,4 +92,5 @@ def _run_upload(style: str | None) -> str:
 
         download = client.get(f"/jobs/{job_id}/download")
         assert download.status_code == 200
-        return download.content.decode("utf-8")
+        document = load_document("wynik.docx", DOCX_MIME, download.content)
+        return "\n".join(document.texts)

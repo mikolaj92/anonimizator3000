@@ -8,10 +8,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from posejdon import TextAnonymizer
 
 from anonimizator3000.config import Settings, normalize_replacement_style, settings_from_env
 from anonimizator3000.jobs import DocumentProcessingQueue, JobSnapshot, QueueRejected
-from anonimizator3000.processor import DocumentProcessor
 from anonimizator3000.upload import UploadError, read_multipart_document
 
 PACKAGE_DIR = Path(__file__).parent
@@ -22,14 +22,14 @@ templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = settings_from_env()
-    processor = DocumentProcessor(
-        max_text_chars=settings.max_text_chars,
+    anonymizer = TextAnonymizer(
         gliner_enabled=settings.gliner_enabled,
         gliner_model=settings.gliner_model,
         gliner_threshold=settings.gliner_threshold,
     )
     queue = DocumentProcessingQueue(
-        processor=processor,
+        anonymizer=anonymizer,
+        max_text_chars=settings.max_text_chars,
         max_size=settings.queue_max_size,
         worker_count=settings.worker_count,
         max_active_jobs_per_ip=settings.max_active_jobs_per_ip,
