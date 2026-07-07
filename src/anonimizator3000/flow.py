@@ -16,6 +16,7 @@ CONVERT_STEP = "convert"
 LOAD_STEP = "load"
 ANONYMIZE_STEP = "anonymize"
 SERIALIZE_STEP = "serialize"
+REDACT_AUTHORS_STEP = "redact_authors"
 
 _STEP_TIMEOUT_SECONDS = 300
 
@@ -42,5 +43,11 @@ DOCUMENT_FLOW = CarrierFlowSpec(
         _step(LOAD_STEP, "Ekstrakcja tekstu", "load", [CONVERT_STEP]),
         _step(ANONYMIZE_STEP, "Anonimizacja", "anonymize", [LOAD_STEP]),
         _step(SERIALIZE_STEP, "Zapis DOCX", "serialize", [ANONYMIZE_STEP]),
+        _step(
+            REDACT_AUTHORS_STEP,
+            "Anonimizacja autorów",
+            "redact_authors",
+            [SERIALIZE_STEP],
+        ),
     ],
 )

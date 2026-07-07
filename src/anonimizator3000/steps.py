@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Protocol
+from zipfile import ZipFile
 
 from doctotext import DOCX_MIME, PDF_MIME, DocumentError, document_to_bytes, load_document
 from posejdon import ReplacementKind
@@ -29,6 +32,13 @@ _STYLE_TO_KIND: dict[str, ReplacementKind] = {
 }
 _DOCX_SUFFIX = ".docx"
 _PDF_SUFFIX = ".pdf"
+
+# Author identity lives in DOCX metadata attributes, not in the `w:t` text the
+# extractor sees: comment authors (word/comments.xml), tracked-change authors
+# (w:ins/w:del/... in the story parts), and word/people.xml. Redact those too.
+_WORD_XML_RE = re.compile(r"^word/.*\.xml$")
+_AUTHOR_RE = re.compile(r'(\b\w+:author=")([^"]*)(")')
+_INITIALS_RE = re.compile(r'(\b\w+:initials=")([^"]*)(")')
 
 
 class SegmentAnonymizer(Protocol):
@@ -129,6 +139,50 @@ def serialize(request: Any) -> dict[str, Any]:
         "content_type": result.content_type,
         "size": len(result.data),
     }
+
+
+def redact_authors(request: Any) -> dict[str, Any]:
+    """Pseudonymize author identity in DOCX metadata (comments, revisions, people)."""
+    context = job_context(request.run_id)
+    context.result_bytes, redacted = _redact_author_metadata(context.result_bytes)
+    return {"authors_redacted": redacted}
+
+
+def _redact_author_metadata(docx_bytes: bytes) -> tuple[bytes, int]:
+    with ZipFile(BytesIO(docx_bytes)) as archive:
+        infos = archive.infolist()
+        parts = {info.filename: archive.read(info.filename) for info in infos}
+
+    aliases: dict[str, str] = {}
+
+    def _alias(match: re.Match[str]) -> str:
+        original = match.group(2)
+        if original == "":
+            return match.group(0)
+        alias = aliases.get(original)
+        if alias is None:
+            alias = f"Autor {len(aliases) + 1}"
+            aliases[original] = alias
+        return f"{match.group(1)}{alias}{match.group(3)}"
+
+    changed: dict[str, bytes] = {}
+    for name, data in parts.items():
+        if not _WORD_XML_RE.match(name):
+            continue
+        text = data.decode("utf-8")
+        updated = _AUTHOR_RE.sub(_alias, text)
+        updated = _INITIALS_RE.sub(lambda match: f"{match.group(1)}{match.group(3)}", updated)
+        if updated != text:
+            changed[name] = updated.encode("utf-8")
+
+    if not changed:
+        return docx_bytes, 0
+
+    output = BytesIO()
+    with ZipFile(output, "w") as out:
+        for info in infos:
+            out.writestr(info, changed.get(info.filename, parts[info.filename]))
+    return output.getvalue(), len(aliases)
 
 
 @contextlib.contextmanager

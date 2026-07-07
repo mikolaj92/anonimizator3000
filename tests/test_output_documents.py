@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+from zipfile import ZipFile
 
 import fitz
 import pytest
@@ -8,6 +9,8 @@ from docx import Document
 from posejdon import TextAnonymizer
 
 from anonimizator3000.pipeline import process_document
+
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 UNICODE_FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -156,6 +159,51 @@ def test_full_pdf_document_regression_produces_docx_without_known_leaks() -> Non
 def test_unsupported_text_input_is_rejected() -> None:
     with pytest.raises(DocumentError, match="DOCX i PDF"):
         _process("sample.txt", "text/plain", b"Anna Nowak email anna@example.com")
+
+
+def _docx_with_comment(body: str, comment: str, author: str) -> bytes:
+    parts: dict[str, bytes] = {}
+    with ZipFile(BytesIO(_docx_bytes(body))) as archive:
+        for name in archive.namelist():
+            parts[name] = archive.read(name)
+    parts["word/comments.xml"] = (
+        f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:comments xmlns:w="{_W_NS}">'
+        f'<w:comment w:id="1" w:author="{author}" w:initials="XX">'
+        f"<w:p><w:r><w:t>{comment}</w:t></w:r></w:p>"
+        f"</w:comment></w:comments>"
+    ).encode()
+    parts["word/people.xml"] = (
+        f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w15:people xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">'
+        f'<w15:person w15:author="{author}"/></w15:people>'
+    ).encode()
+    output = BytesIO()
+    with ZipFile(output, "w") as out:
+        for name, data in parts.items():
+            out.writestr(name, data)
+    return output.getvalue()
+
+
+def test_comment_author_is_redacted_from_metadata() -> None:
+    data = _docx_with_comment(
+        "Zwykły tekst umowy.",
+        "Uwaga od recenzenta.",
+        author="Jan Kowalski",
+    )
+
+    result = _process("z-komentarzem.docx", DOCX_MIME, data)
+
+    with ZipFile(BytesIO(result.data)) as archive:
+        comments = archive.read("word/comments.xml").decode()
+        people = archive.read("word/people.xml").decode()
+
+    assert "Jan Kowalski" not in comments
+    assert "Jan Kowalski" not in people
+    assert 'w:author="Autor 1"' in comments
+    assert 'w15:author="Autor 1"' in people
+    # The comment body text is still anonymized by the main pipeline.
+    assert "Uwaga od recenzenta" in comments
 
 
 def test_processor_respects_docx_text_limit() -> None:
