@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -14,6 +15,7 @@ from anonimizator3000.processor import DocumentProcessor
 from anonimizator3000.upload import UploadError, read_multipart_document
 
 PACKAGE_DIR = Path(__file__).parent
+REPO_DIR = PACKAGE_DIR.parents[1]
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
 
@@ -105,7 +107,14 @@ async def download_job(request: Request, job_id: str) -> Response:
 
 @app.get("/healthz", response_class=PlainTextResponse)
 async def healthz() -> PlainTextResponse:
-    return PlainTextResponse("ok")
+    return PlainTextResponse(f"{_version_date()}\n")
+
+
+def _version_date() -> str:
+    lock = REPO_DIR / "uv.lock"
+    if lock.exists():
+        return datetime.fromtimestamp(lock.stat().st_mtime, UTC).date().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 def _job_fragment(request: Request, job: JobSnapshot) -> HTMLResponse:

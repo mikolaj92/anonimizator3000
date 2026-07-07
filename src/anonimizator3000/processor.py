@@ -57,7 +57,7 @@ class DocumentProcessor:
         findings: Counter[str] = Counter()
         if hasattr(self._anonymizer, "anonymize_segments"):
             anonymized = self._anonymizer.anonymize_segments(texts, replacement_style=kind)
-            anonymized_texts = anonymized.texts
+            anonymized_texts = [text.replace("\xa0", " ") for text in anonymized.texts]
             findings.update(anonymized.findings)
         else:
             anonymized_texts = []
@@ -66,7 +66,7 @@ class DocumentProcessor:
                     anonymized_texts.append(text)
                     continue
                 anonymized = self._anonymizer.anonymize(text, replacement_style=kind)
-                anonymized_texts.append(anonymized.text)
+                anonymized_texts.append(anonymized.text.replace("\xa0", " "))
                 findings.update(anonymized.findings)
 
         document.apply_texts(anonymized_texts)

@@ -1,5 +1,7 @@
 import time
+from datetime import date
 from io import BytesIO
+from zipfile import ZipFile
 
 import pytest
 from doctotext import DOCX_MIME
@@ -15,6 +17,22 @@ def _docx_bytes(text: str) -> bytes:
     document.add_paragraph(text)
     output = BytesIO()
     document.save(output)
+    return output.getvalue()
+
+
+def _docx_bytes_with_hyperlink(text: str) -> bytes:
+    """A DOCX whose body references the ``r:`` namespace, like real Word files."""
+    with ZipFile(BytesIO(_docx_bytes(text))) as archive:
+        parts = {name: archive.read(name) for name in archive.namelist()}
+    document_xml = parts["word/document.xml"].decode()
+    parts["word/document.xml"] = document_xml.replace(
+        f"<w:r><w:t>{text}</w:t></w:r>",
+        f'<w:hyperlink r:id="rId999"><w:r><w:t>{text}</w:t></w:r></w:hyperlink>',
+    ).encode()
+    output = BytesIO()
+    with ZipFile(output, "w") as archive:
+        for name, data in parts.items():
+            archive.writestr(name, data)
     return output.getvalue()
 
 
@@ -74,6 +92,52 @@ def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
         assert "Jan Kowalski" not in text
         assert "44051401359" not in text
         assert "jan@example.com" not in text
+
+
+def test_docx_download_keeps_root_namespace_declarations() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/jobs",
+            files={
+                "document": (
+                    "sample.docx",
+                    _docx_bytes_with_hyperlink("Jan Kowalski"),
+                    DOCX_MIME,
+                )
+            },
+        )
+        job_id = response.text.split("/jobs/", 1)[1].split('"', 1)[0]
+
+        for _ in range(50):
+            status = client.get(f"/jobs/{job_id}")
+            if "Gotowe" in status.text:
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("Job did not finish")
+
+        download = client.get(f"/jobs/{job_id}/download")
+
+    assert download.headers["content-type"] == DOCX_MIME
+    document_xml = ZipFile(BytesIO(download.content)).read("word/document.xml").decode()
+    start = document_xml.index("<w:document")
+    root = document_xml[start : document_xml.index(">", start) + 1]
+    # mc:Ignorable references these prefixes; dropping their xmlns breaks Word.
+    assert "xmlns:w14=" in root
+    assert "xmlns:wp14=" in root
+    # The file must still open as a valid DOCX.
+    assert "Jan Kowalski" not in "".join(
+        p.text for p in Document(BytesIO(download.content)).paragraphs
+    )
+
+
+def test_healthz_returns_only_update_date() -> None:
+    with TestClient(app) as client:
+        response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert date.fromisoformat(response.text.strip())
+    assert response.text.count("\n") == 1
 
 
 def test_upload_size_limit_returns_fragment() -> None:
