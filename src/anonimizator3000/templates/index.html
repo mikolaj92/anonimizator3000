@@ -54,27 +54,6 @@
                 accept=".txt,.md,.csv,.json,.xml,.html,.htm,.log,.rtf,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 required
               >
-              <fieldset class="style-choice">
-                <legend>Styl anonimizacji</legend>
-                <label class="style-option">
-                  <input
-                    type="radio"
-                    name="style"
-                    value="mask"
-                    {% if settings.replacement_style != 'labels' %}checked{% endif %}
-                  >
-                  <span>Maska <code>****</code></span>
-                </label>
-                <label class="style-option">
-                  <input
-                    type="radio"
-                    name="style"
-                    value="labels"
-                    {% if settings.replacement_style == 'labels' %}checked{% endif %}
-                  >
-                  <span>Etykiety <code>[OSOBA_1]</code></span>
-                </label>
-              </fieldset>
               <button class="btn" type="submit">
                 <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>

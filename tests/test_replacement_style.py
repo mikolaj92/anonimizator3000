@@ -44,14 +44,13 @@ def test_settings_from_env_reads_replacement_style(monkeypatch: pytest.MonkeyPat
     assert settings_from_env().replacement_style == DEFAULT_REPLACEMENT_STYLE
 
 
-def test_index_renders_style_choice() -> None:
+def test_index_hides_style_choice() -> None:
     with TestClient(app) as client:
         response = client.get("/")
 
     assert response.status_code == 200
-    assert 'name="style"' in response.text
-    assert 'value="labels"' in response.text
-    assert 'value="mask"' in response.text
+    assert 'name="style"' not in response.text
+    assert "Styl anonimizacji" not in response.text
 
 
 def test_labels_style_produces_category_placeholders() -> None:
