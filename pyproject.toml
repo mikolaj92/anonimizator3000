@@ -39,7 +39,7 @@ detectors = [
 [tool.uv.sources]
 doctotext = { git = "https://github.com/mikolaj92/DocToText.git", branch = "main" }
 fala-runtime = { git = "https://github.com/mikolaj92/Fala.git", branch = "main" }
-posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", branch = "main" }
+posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", tag = "v0.1.0" }
 
 [project.scripts]
 anonimizator3000 = "anonimizator3000.main:main"

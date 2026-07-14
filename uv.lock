@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12, <3.14"
 
 [[package]]
@@ -59,8 +59,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "pdf2docx", specifier = ">=0.5.8" },
-    { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?branch=main" },
-    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?branch=main" },
+    { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
+    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "python-multipart", specifier = ">=0.0.12" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
@@ -920,7 +920,7 @@ wheels = [
 [[package]]
 name = "posejdon"
 version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/Posejdon.git?branch=main#818b828171878f415f90da5c0eef3065fc3eae4a" }
+source = { git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0#f408b4d1e8ecf38fccb2db4609a935c7cc7d82dd" }
 dependencies = [
     { name = "click" },
     { name = "httpx" },

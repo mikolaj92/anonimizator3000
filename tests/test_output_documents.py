@@ -128,6 +128,20 @@ def test_full_docx_document_regression_has_no_known_leaks() -> None:
     _assert_no_known_leaks(_docx_text(result.data))
 
 
+def test_processor_anonymizes_spaced_nip_and_krs_without_leaking_digits() -> None:
+    result = _process(
+        "identyfikatory.docx",
+        DOCX_MIME,
+        _docx_bytes("NIP: 856 734 62 15; KRS 0000 1234 56"),
+    )
+
+    output_text = _docx_text(result.data)
+    assert "856 734 62 15" not in output_text
+    assert "0000 1234 56" not in output_text
+    assert result.findings["NIP"] == 1
+    assert result.findings["KRS"] == 1
+
+
 def test_pdf_input_is_converted_to_anonymized_docx() -> None:
     data = _unicode_pdf_bytes(
         "Dane nie są fikcyjne. Zażółć gęślą jaźń. Jan Kowalski PESEL 44051401359",
