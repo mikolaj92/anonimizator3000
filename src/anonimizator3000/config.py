@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from os import getenv
+from pathlib import Path
 
 REPLACEMENT_STYLES = ("mask", "labels")
 DEFAULT_REPLACEMENT_STYLE = "mask"
@@ -34,6 +35,13 @@ def _get_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _get_optional_path(name: str) -> str | None:
+    raw = getenv(name)
+    if raw is None or not raw.strip():
+        return None
+    return str(Path(raw.strip()).expanduser())
+
+
 @dataclass(frozen=True)
 class Settings:
     max_file_bytes: int = 5_000_000
@@ -41,7 +49,7 @@ class Settings:
     queue_max_size: int = 20
     worker_count: int = 1
     max_active_jobs_per_ip: int = 2
-    rate_limit_submissions: int = 6
+    rate_limit_submissions: int = 100
     rate_limit_window_seconds: int = 600
     job_ttl_seconds: int = 900
     trust_proxy_headers: bool = False
@@ -49,6 +57,16 @@ class Settings:
     gliner_model: str = "urchade/gliner_multi_pii-v1"
     gliner_threshold: float = 0.45
     replacement_style: str = DEFAULT_REPLACEMENT_STYLE
+    # Shared auth SQLite (my-auth + my-usermanager). None → package default.
+    auth_db_path: str | None = None
+    passkey_rp_id: str = "localhost"
+    passkey_rp_name: str = "Dokumenty"
+    passkey_origin: str = "http://localhost:8000"
+    session_secret: str = "dev-anon-session-secret-change-me"
+    session_cookie_name: str = "anon_session"
+    session_cookie_secure: bool = False
+    session_cookie_samesite: str = "lax"
+    session_max_age: int = 60 * 60 * 24 * 14
 
     @property
     def max_multipart_body_bytes(self) -> int:
@@ -78,4 +96,17 @@ def settings_from_env() -> Settings:
         replacement_style=normalize_replacement_style(
             getenv("ANON_REPLACEMENT_STYLE"), Settings.replacement_style
         ),
+        auth_db_path=_get_optional_path("ANON_AUTH_DB"),
+        passkey_rp_id=getenv("ANON_PASSKEY_RP_ID", Settings.passkey_rp_id),
+        passkey_rp_name=getenv("ANON_PASSKEY_RP_NAME", Settings.passkey_rp_name),
+        passkey_origin=getenv("ANON_PASSKEY_ORIGIN", Settings.passkey_origin),
+        session_secret=getenv("ANON_SESSION_SECRET", Settings.session_secret),
+        session_cookie_name=getenv("ANON_SESSION_COOKIE", Settings.session_cookie_name),
+        session_cookie_secure=_get_bool(
+            "ANON_SESSION_COOKIE_SECURE", Settings.session_cookie_secure
+        ),
+        session_cookie_samesite=getenv(
+            "ANON_SESSION_COOKIE_SAMESITE", Settings.session_cookie_samesite
+        ),
+        session_max_age=_get_int("ANON_SESSION_MAX_AGE", Settings.session_max_age),
     )

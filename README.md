@@ -18,6 +18,16 @@ Logika jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 
 `pyproject.toml` wskazuje branche `main`, a `uv.lock` przypina konkretne commity.
 
+### Fala compatibility boundary
+
+Anonimizator3000 remains on the immutable legacy `fala-runtime` revision. Its
+pipeline imports the CPython carrier API (`fala.models`,
+`fala.carrier_runtime.FalaRuntime`, and `fala.runtime_backend`), which is not
+provided by Fala v0.7.x. Fala v0.7.18 is therefore **not** a drop-in upgrade for
+this product; migrating it requires a separate runtime/API migration and is
+outside this platform UI audit. Argus and MSDS use the separate v0.7.18 host/sdk
+surface.
+
 ## Stack
 
 - `uv`
@@ -119,7 +129,7 @@ Domyślne limity można zmienić przez zmienne środowiskowe:
 | `ANON_QUEUE_MAX_SIZE` | `20` | Maksymalna liczba zadań w kolejce |
 | `ANON_WORKER_COUNT` | `1` | Liczba lokalnych workerów |
 | `ANON_MAX_ACTIVE_JOBS_PER_IP` | `2` | Maksymalna liczba aktywnych zadań per IP |
-| `ANON_RATE_LIMIT_SUBMISSIONS` | `6` | Liczba uploadów per okno czasowe |
+| `ANON_RATE_LIMIT_SUBMISSIONS` | `100` | Liczba uploadów per okno czasowe |
 | `ANON_RATE_LIMIT_WINDOW_SECONDS` | `600` | Okno limitu per IP |
 | `ANON_JOB_TTL_SECONDS` | `900` | Czas trzymania zakończonego wyniku w pamięci |
 | `ANON_TRUST_PROXY_HEADERS` | `false` | Czy ufać `X-Forwarded-For` |

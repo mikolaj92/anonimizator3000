@@ -4,24 +4,77 @@ from pathlib import Path
 from urllib.parse import quote
 
 import uvicorn
+from app_factory.fastapi import install_app_factory_ui
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from posejdon import TextAnonymizer
+from starlette.middleware.sessions import SessionMiddleware
 
+from anonimizator3000.auth_stores import migrate_auth_database
 from anonimizator3000.config import Settings, normalize_replacement_style, settings_from_env
 from anonimizator3000.jobs import DocumentProcessingQueue, JobSnapshot, QueueRejected
+from anonimizator3000.passkey_setup import bootstrap_admin, install_passkey_routes
+from anonimizator3000.platform_chrome import (
+    DEFAULT_LOCALE,
+    LOCALE_COOKIE_NAME,
+    install_platform_chrome,
+    platform_request_context,
+)
 from anonimizator3000.upload import UploadError, read_multipart_document
+from anonimizator3000.usermanager_ui import install_anon_usermanager_ui
 
 PACKAGE_DIR = Path(__file__).parent
 REPO_DIR = PACKAGE_DIR.parents[1]
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
+# Module-level settings for middleware/install; lifespan reloads from env.
+_settings_boot = settings_from_env()
+_auth_database_boot = migrate_auth_database(_settings_boot)
+
+
+def _session_user(request: Request) -> dict | None:
+    if "session" not in request.scope:
+        return None
+    user = request.session.get("user")
+    return user if isinstance(user, dict) and user.get("id") else None
+
+
+def _request_locale(request: Request) -> str:
+    query = request.query_params.get("lang")
+    if isinstance(query, str) and query:
+        return query
+    cookie = request.cookies.get(LOCALE_COOKIE_NAME)
+    if isinstance(cookie, str) and cookie:
+        return cookie
+    return DEFAULT_LOCALE
+
+
+def _page_context(request: Request, **extra) -> dict:
+    user = _session_user(request)
+    return {
+        "request": request,
+        "user": user,
+        **platform_request_context(
+            user=user,
+            current_path=request.url.path,
+            locale=_request_locale(request),
+        ),
+        **extra,
+    }
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = settings_from_env()
+    auth_database = migrate_auth_database(settings)
+    bootstrap_admin(auth_database)
+    binding = getattr(app.state, "auth_database_binding", None)
+    if binding is not None:
+        binding.update(auth_database)
+    app.state.auth_database = auth_database
+
     anonymizer = TextAnonymizer(
         gliner_enabled=settings.gliner_enabled,
         gliner_model=settings.gliner_model,
@@ -47,7 +100,33 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Anonimizator3000", lifespan=lifespan)
+
+# Install order: app-factory platform assets, then host /static (domain CSS only).
+_platform = install_app_factory_ui(app, environments=(templates.env,))
 app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
+install_platform_chrome([templates.env])
+
+_passkey_ui, _auth_binding = install_passkey_routes(
+    app,
+    platform=_platform,
+    auth_database=_auth_database_boot,
+    settings=_settings_boot,
+)
+install_anon_usermanager_ui(
+    app,
+    platform=_platform,
+    environment=templates.env,
+    database=_auth_binding,
+)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_settings_boot.session_secret,
+    max_age=_settings_boot.session_max_age,
+    session_cookie=_settings_boot.session_cookie_name,
+    https_only=_settings_boot.session_cookie_secure,
+    same_site=_settings_boot.session_cookie_samesite,
+)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -55,7 +134,7 @@ async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"settings": _settings(request), "request": request},
+        context=_page_context(request, settings=_settings(request)),
     )
 
 
@@ -151,7 +230,7 @@ def _attachment_header(filename: str) -> str:
         for char in safe_name
     ).strip(" .") or "download"
     encoded = quote(safe_name, safe="")
-    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
+    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
 
 
 def _settings(request: Request) -> Settings:
