@@ -50,9 +50,13 @@ def test_index_does_not_show_removed_header_copy() -> None:
     assert "Gotowy dokument pojawi się tutaj." not in response.text
     assert "cdn.jsdelivr.net" not in response.text
     assert "unpkg.com" not in response.text
-    assert "/static/basecoat/basecoat.css" in response.text
-    assert "/static/basecoat/basecoat.js" in response.text
-    assert "/static/htmx.min.js" in response.text
+    # Platform assets from app-factory (same-origin /static/platform), not vendored.
+    assert "/static/platform/" in response.text
+    assert "/static/basecoat/" not in response.text
+    assert "/static/htmx.min.js" not in response.text
+    assert "/static/app.css" in response.text
+    assert "100 dokumentów" in response.text
+    assert "10 minut" in response.text
 
 
 def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
@@ -179,3 +183,38 @@ class _FakeUploadRequest:
 
     async def stream(self):
         yield b""
+
+
+def test_platform_auth_routes_exist() -> None:
+    """Package-owned auth/account/admin surfaces are reachable anonymously."""
+    with TestClient(app) as client:
+        login = client.get("/login")
+        register = client.get("/register")
+        account = client.get("/account", follow_redirects=False)
+        profile = client.post("/account/profile", follow_redirects=False)
+        admin_users = client.get("/admin/users", follow_redirects=False)
+        logout = client.post("/logout", follow_redirects=False)
+
+    assert login.status_code == 200
+    assert register.status_code == 200
+    assert account.status_code == 303
+    assert profile.status_code == 401
+    assert admin_users.status_code == 303
+    assert logout.status_code == 303
+
+
+def test_platform_asset_is_served_same_origin() -> None:
+    with TestClient(app) as client:
+        response = client.get("/static/platform/basecoat-factory.min.css")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/css")
+
+def test_base_extends_product_shell() -> None:
+    from pathlib import Path as P
+    base = (P(__file__).resolve().parents[1] / "src/anonimizator3000/templates/base.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'extends "app_factory/product_shell.html"' in base
+    assert "basecoat/basecoat" not in base
+    assert "htmx.min.js" not in base

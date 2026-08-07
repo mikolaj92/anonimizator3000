@@ -276,7 +276,11 @@ class DocumentProcessingQueue:
         timestamps = self._submissions[ip]
         self._prune_timestamps(timestamps, now)
         if len(timestamps) >= self._rate_limit_submissions:
-            raise QueueRejected("Limit uploadów z tego IP został przekroczony.")
+            raise QueueRejected(
+                f"Limit uploadów z tego IP został przekroczony: maksymalnie "
+                f"{self._rate_limit_submissions} dokumentów w ciągu "
+                f"{self._rate_limit_window_seconds} sekund. Spróbuj ponownie później."
+            )
 
     def _active_jobs_for_ip(self, ip: str) -> int:
         return sum(

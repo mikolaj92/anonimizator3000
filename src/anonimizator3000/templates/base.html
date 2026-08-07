@@ -1,0 +1,17 @@
+{% extends "app_factory/product_shell.html" %}
+
+{# Host = domain CSS + content only. Frame is app-factory product_shell. #}
+
+{% block title %}{% block page_title_block %}Dokumenty{% endblock %}{% endblock %}
+
+{% block head_extra %}
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+{% endblock %}
+
+{% block loading_label %}Ładowanie…{% endblock %}
+
+{% block content %}
+  {% if content_template %}
+    {% include content_template %}
+  {% endif %}
+{% endblock %}
