@@ -2,7 +2,9 @@
 
 Publiczny portal do lokalnej anonimizacji dokumentów.
 
-Upload trafia wyłącznie do pamięci procesu. Aplikacja nie zapisuje oryginalnych dokumentów na dysku. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania. Wynik anonimizacji jest trzymany krótko w pamięci, żeby użytkownik mógł go pobrać.
+Upload dokumentów trafia wyłącznie do pamięci procesu. Aplikacja nie zapisuje oryginalnych dokumentów na dysku. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania. Wynik anonimizacji jest trzymany krótko w pamięci, żeby użytkownik mógł go pobrać.
+
+Osobno od dokumentów działa trwała baza SQLite platformy auth (passkey / konta użytkowników) — patrz sekcja Auth i zmienna `ANON_AUTH_DB`.
 
 ## Architektura
 
@@ -58,15 +60,6 @@ Potem otwórz `http://127.0.0.1:8000`.
 uv run uvicorn anonimizator3000.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## CI
-
-GitHub Actions używa tych samych GitHub dependencies co lokalne środowisko.
-Ponieważ `Posejdon` jest prywatny, repo `anonimizator3000` musi mieć secret:
-
-- `POSEJDON_READ_TOKEN` - token z read-only dostępem do `mikolaj92/Posejdon`
-
-Jeśli `Posejdon` stanie się publiczny, secret i krok konfiguracji auth w CI można usunąć.
-
 ## Obsługiwane wejście
 
 - tekstowe: `.txt`, `.md`, `.csv`, `.json`, `.xml`, `.html`, `.log`
@@ -118,6 +111,41 @@ Zmienne:
 - `ANON_GLINER_MODEL=urchade/gliner_multi_pii-v1`
 - `ANON_GLINER_THRESHOLD=0.45`
 
+## Auth (passkeys + usermanager)
+
+Portal używa wspólnego stacku platformy: `my-auth` (passkeys WebAuthn) i `my-usermanager` (konta, role, `/account`, `/admin/users`).
+
+### Polityka rejestracji
+
+Rejestracja jest **otwarta** — każdy może założyć konto passkey przez `/register`. Pierwszy zarejestrowany użytkownik dostaje rolę admin. Dodatkowo można wymusić admina dla znanego `user_id` przez `BOOTSTRAP_ADMIN_ID` / `ANON_BOOTSTRAP_ADMIN_ID` (idempotentnie przy starcie).
+
+To celowa polityka produktu (lokalny / self-hosted portal), nie bug. Jeśli wdrażasz publicznie, zabezpiecz reverse proxy / sieć albo wyłącz publiczną rejestrację w przyszłej konfiguracji.
+
+### Zmienne środowiskowe auth
+
+| Zmienna | Domyślnie | Znaczenie |
+| --- | --- | --- |
+| `ANON_SESSION_SECRET` | `dev-anon-session-secret-change-me` | Sekret podpisu cookie sesji (Starlette). **W produkcji ustaw własny, losowy sekret.** |
+| `ANON_SESSION_COOKIE` | `anon_session` | Nazwa cookie sesji |
+| `ANON_SESSION_COOKIE_SECURE` | `false` | `Secure` na cookie sesji i passkey cookies (`true` za HTTPS) |
+| `ANON_SESSION_COOKIE_SAMESITE` | `lax` | `SameSite` cookie sesji |
+| `ANON_SESSION_MAX_AGE` | `1209600` (14 dni) | Max age sesji w sekundach |
+| `ANON_AUTH_DB` | `storage/auth.sqlite3` (w katalogu repo) | Ścieżka trwałej bazy SQLite auth (credentials, users, grants) |
+| `ANON_PASSKEY_RP_ID` | `localhost` | WebAuthn Relying Party ID (domena bez schematu) |
+| `ANON_PASSKEY_RP_NAME` | `Dokumenty` | Wyświetlana nazwa RP |
+| `ANON_PASSKEY_ORIGIN` | `http://localhost:8000` | Dozwolony origin WebAuthn (pełny URL) |
+| `BOOTSTRAP_ADMIN_ID` / `ANON_BOOTSTRAP_ADMIN_ID` | *(puste)* | Opcjonalny `user_id` dostający rolę admin przy starcie |
+
+Produkcja (HTTPS):
+
+```bash
+export ANON_SESSION_SECRET="$(openssl rand -hex 32)"
+export ANON_SESSION_COOKIE_SECURE=true
+export ANON_PASSKEY_RP_ID=anon.example.com
+export ANON_PASSKEY_ORIGIN=https://anon.example.com
+export ANON_AUTH_DB=/var/lib/anonimizator3000/auth.sqlite3
+```
+
 ## Limity
 
 Domyślne limity można zmienić przez zmienne środowiskowe:
@@ -148,9 +176,9 @@ uv run ruff check .
 
 ## Prywatność
 
-- brak zapisu uploadów na dysku
-- brak bazy danych
+- brak zapisu **uploadów dokumentów** na dysku — oryginały i wyniki są tylko w pamięci procesu
 - workflow Fali działa na lokalnym store w pamięci procesu
-- wynik wygasa po TTL
+- wynik anonimizacji wygasa po TTL (`ANON_JOB_TTL_SECONDS`)
+- **auth jest trwały**: konta, passkey credentials i role leżą w SQLite (`ANON_AUTH_DB`, domyślnie `storage/auth.sqlite3`) — to nie jest baza dokumentów
 - odrzucanie za dużych plików przed anonimizacją
 - limit aktywnych zadań i rate limit per IP
