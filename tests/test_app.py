@@ -1,3 +1,5 @@
+import base64
+import json
 import time
 from datetime import date
 from io import BytesIO
@@ -7,8 +9,9 @@ import pytest
 from doctotext import DOCX_MIME
 from docx import Document
 from fastapi.testclient import TestClient
+from itsdangerous import TimestampSigner
 
-from anonimizator3000.main import _attachment_header, app
+from anonimizator3000.main import _attachment_header, _settings_boot, app
 from anonimizator3000.upload import UploadError, read_multipart_document
 
 
@@ -203,6 +206,28 @@ def test_platform_auth_routes_exist() -> None:
     assert logout.status_code == 303
 
 
+@pytest.mark.parametrize("path", ("/login", "/account", "/admin/users"))
+def test_platform_ui_shell_loads_same_origin_stack(path: str) -> None:
+    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    payload = base64.b64encode(json.dumps(session).encode())
+    cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
+
+    with TestClient(app) as client:
+        client.cookies.set(_settings_boot.session_cookie_name, cookie)
+        response = client.get(path)
+
+    assert response.status_code == 200
+    for asset in (
+        "/static/platform/basecoat-factory.min.css",
+        "/static/platform/basecoat-js.min.js",
+        "/static/platform/htmx.min.js",
+        "/static/platform/alpine.min.js",
+    ):
+        assert asset in response.text
+    assert "cdn.jsdelivr.net" not in response.text
+    assert "unpkg.com" not in response.text
+
+
 def test_platform_asset_is_served_same_origin() -> None:
     with TestClient(app) as client:
         response = client.get("/static/platform/basecoat-factory.min.css")
@@ -210,11 +235,11 @@ def test_platform_asset_is_served_same_origin() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/css")
 
+
 def test_base_extends_product_shell() -> None:
     from pathlib import Path as P
-    base = (P(__file__).resolve().parents[1] / "src/anonimizator3000/templates/base.html").read_text(
-        encoding="utf-8"
-    )
+    template = P(__file__).resolve().parents[1] / "src/anonimizator3000/templates/base.html"
+    base = template.read_text(encoding="utf-8")
     assert 'extends "app_factory/product_shell.html"' in base
     assert "basecoat/basecoat" not in base
     assert "htmx.min.js" not in base
