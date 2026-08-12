@@ -13,9 +13,17 @@ from doctotext import DOCX_MIME
 from docx import Document
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
+from posejdon import TextAnonymizer
 
+import anonimizator3000.main as main_module
 from anonimizator3000.main import _attachment_header, _settings_boot, app
 from anonimizator3000.upload import UploadError, read_multipart_document
+
+
+@pytest.fixture(autouse=True)
+def _use_regex_only_anonymizer(monkeypatch) -> None:
+    """UI tests do not require optional detector packages or model downloads."""
+    monkeypatch.setattr(main_module, "create_anonymizer", lambda settings: TextAnonymizer())
 
 
 def _docx_bytes(text: str) -> bytes:

@@ -13,17 +13,47 @@ class _DetectorFailure(BaseException):
     """Escape Posejdon's broad ``suppress(Exception)`` detector boundary."""
 
 
+class _BackendMonitor:
+    """Remember errors that a Posejdon detector catches and turns into no findings."""
+
+    def __init__(self, backend: Any, method_name: str) -> None:
+        self._backend = backend
+        self._method_name = method_name
+        self.failure: BaseException | None = None
+
+    def __getattr__(self, name: str) -> Any:
+        attribute = getattr(self._backend, name)
+        if name != self._method_name:
+            return attribute
+
+        def monitored(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return attribute(*args, **kwargs)
+            except BaseException as error:
+                self.failure = error
+                raise
+
+        return monitored
+
+
 class _FailClosedDetector:
-    def __init__(self, detector: Any) -> None:
+    def __init__(self, detector: Any, monitor: _BackendMonitor | None = None) -> None:
         self._detector = detector
+        self._monitor = monitor
         self.name = type(detector).__name__
 
     def detect(self, text: str) -> Any:
+        if self._monitor is not None:
+            self._monitor.failure = None
         try:
-            return self._detector.detect(text)
+            result = self._detector.detect(text)
         except Exception as error:
             failure = _DetectorFailure(f"{self.name} failed")
             raise failure from error
+        if self._monitor is not None and self._monitor.failure is not None:
+            failure = _DetectorFailure(f"{self.name} failed")
+            raise failure from self._monitor.failure
+        return result
 
 
 class SegmentAnonymizer(Protocol):
@@ -39,16 +69,36 @@ def create_anonymizer(settings: Settings) -> SegmentAnonymizer:
     if settings.gliner_model is not None:
         options["gliner_model"] = settings.gliner_model
     anonymizer = TextAnonymizer(**options)
-    detector_names = {type(detector).__name__ for detector in anonymizer.detectors}
+    detectors = {type(detector).__name__: detector for detector in anonymizer.detectors}
     required = {"RegexDetector", "PresidioDetector"}
     if settings.gliner_enabled:
         required.add("GLiNERDetector")
-    missing = sorted(required - detector_names)
-    if missing:
-        names = ", ".join(missing)
+    unavailable = sorted(
+        name
+        for name in required
+        if name not in detectors or getattr(detectors[name], "available", True) is not True
+    )
+    if unavailable:
+        names = ", ".join(unavailable)
         raise RuntimeError(f"Posejdon failed to initialize required detectors: {names}")
 
-    anonymizer.detectors = [_FailClosedDetector(detector) for detector in anonymizer.detectors]
+    backend_methods = {
+        "PresidioDetector": ("_engine", "analyze"),
+        "GLiNERDetector": ("_model", "predict_entities"),
+    }
+    wrapped = []
+    for detector in anonymizer.detectors:
+        name = type(detector).__name__
+        monitor = None
+        if name in backend_methods:
+            backend_name, method_name = backend_methods[name]
+            backend = getattr(detector, backend_name, None)
+            if backend is None:
+                raise RuntimeError(f"Posejdon {name} backend is unavailable")
+            monitor = _BackendMonitor(backend, method_name)
+            setattr(detector, backend_name, monitor)
+        wrapped.append(_FailClosedDetector(detector, monitor))
+    anonymizer.detectors = wrapped
     return _AnonymizerBoundary(anonymizer)
 
 
