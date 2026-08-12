@@ -1,5 +1,7 @@
 import base64
+import html
 import json
+import re
 import time
 from datetime import date
 from io import BytesIO
@@ -194,6 +196,31 @@ def test_upload_size_limit_returns_fragment() -> None:
         assert response.status_code == 413
         assert "Odrzucono upload" in response.text
         assert 'id="job-panel"' not in response.text
+
+
+def test_htmx_config_swaps_client_error_fragments() -> None:
+    with TestClient(app) as client:
+        page = client.get("/")
+        missing_job = client.get(
+            "/jobs/not-a-job", headers={"HX-Request": "true"}
+        )
+
+    match = re.search(
+        r'<meta\s+name="htmx-config"\s+content=\'([^\']+)\'', page.text
+    )
+    assert match is not None
+    response_handling = json.loads(html.unescape(match.group(1)))["responseHandling"]
+
+    for status_code in (413, missing_job.status_code):
+        handling = next(
+            rule
+            for rule in response_handling
+            if re.fullmatch(rule["code"], str(status_code))
+        )
+        assert handling == {"code": "4..", "swap": True, "error": True}
+
+    assert missing_job.status_code == 404
+    assert "Zadanie wygasło albo nie istnieje." in missing_job.text
 
 
 @pytest.mark.asyncio
