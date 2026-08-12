@@ -233,13 +233,13 @@ async def test_invalid_content_length_returns_upload_error() -> None:
     assert error.value.status_code == 400
 
 
-def test_attachment_header_sanitizes_download_filename() -> None:
-    header = _attachment_header('..\\evil"\r\nx.docx')
+def test_attachment_header_uses_encoded_filename() -> None:
+    header = _attachment_header('..\\zażółć"\r\nx.docx')
 
-    assert "\r" not in header
-    assert "\n" not in header
-    assert 'filename="evil___x.docx"' in header
-    assert "filename*=UTF-8''evil%22%0D%0Ax.docx" in header
+    assert header == (
+        "attachment; filename*=UTF-8''za%C5%BC%C3%B3%C5%82%C4%87%22%0D%0Ax.docx"
+    )
+    assert 'filename="' not in header
 
 
 class _FakeUploadRequest:
