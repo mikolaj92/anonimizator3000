@@ -30,10 +30,9 @@ _PATHS: Final = PlatformPaths(
     admin_users="/admin/users",
 )
 
-_LOCALES: Final = (
-    PlatformLocale(code="pl", label="PL"),
-    PlatformLocale(code="en", label="EN"),
-    PlatformLocale(code="de", label="DE"),
+_LOCALE_LABELS: Final = (("pl", "PL"), ("en", "EN"), ("de", "DE"))
+_LOCALES: Final = tuple(
+    PlatformLocale(code=code, label=label) for code, label in _LOCALE_LABELS
 )
 
 
@@ -103,13 +102,26 @@ def platform_request_context(
             is_admin=bool(user.get("is_admin")),
             user_id=str(user.get("id")),
         )
-    return build_platform_context(
-        platform_config(user=user),
-        user=platform_user,
-        current_path=current_path,
-        locales=_LOCALES,
-        locale=locale or DEFAULT_LOCALE,
+    resolved_locale = locale if locale in SUPPORTED_LOCALES else DEFAULT_LOCALE
+    locale_path = current_path or "/"
+    locales = tuple(
+        PlatformLocale(
+            code=code,
+            label=label,
+            href=f"{locale_path}?lang={code}",
+        )
+        for code, label in _LOCALE_LABELS
     )
+    return {
+        **build_platform_context(
+            platform_config(user=user),
+            user=platform_user,
+            current_path=current_path,
+            locales=locales,
+            locale=resolved_locale,
+        ),
+        "lang": resolved_locale,
+    }
 
 
 def login_platform_config() -> PlatformConfig:

@@ -260,6 +260,40 @@ def test_base_delegates_platform_chrome_to_product_shell() -> None:
     assert "platform_session" not in base
 
 
+@pytest.mark.parametrize("path", ("/", "/account", "/admin/users"))
+def test_product_surfaces_share_platform_chrome_contract(path: str) -> None:
+    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    payload = base64.b64encode(json.dumps(session).encode())
+    cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
+
+    with TestClient(app) as client:
+        client.cookies.set(_settings_boot.session_cookie_name, cookie)
+        response = client.get(f"{path}?lang=de")
+
+    assert response.status_code == 200
+    assert '<html lang="de">' in response.text
+    for marker in (
+        'id="sidebar"',
+        'id="sidebar-toggle"',
+        "data-platform-theme-locale",
+        'data-href="/?lang=pl"' if path == "/" else f'data-href="{path}?lang=pl"',
+        "/static/platform/basecoat-factory.min.css",
+        "/static/platform/basecoat-js.min.js",
+        "/static/platform/htmx.min.js",
+        "/static/platform/alpine.min.js",
+    ):
+        assert marker in response.text
+
+
+def test_invalid_landing_locale_falls_back_to_default() -> None:
+    with TestClient(app) as client:
+        response = client.get("/?lang=not-supported")
+
+    assert response.status_code == 200
+    assert '<html lang="pl">' in response.text
+    assert '<option\n      value="pl"\n      data-href="/?lang=pl"\n      selected' in response.text
+
+
 def test_product_shell_uses_platform_controls_without_logout() -> None:
     session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
     payload = base64.b64encode(json.dumps(session).encode())
