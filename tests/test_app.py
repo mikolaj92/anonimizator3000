@@ -3,6 +3,7 @@ import json
 import time
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
@@ -236,10 +237,21 @@ def test_platform_asset_is_served_same_origin() -> None:
     assert response.headers["content-type"].startswith("text/css")
 
 
-def test_base_extends_product_shell() -> None:
-    from pathlib import Path as P
-    template = P(__file__).resolve().parents[1] / "src/anonimizator3000/templates/base.html"
+def test_host_static_contains_only_product_assets() -> None:
+    static_dir = Path(__file__).resolve().parents[1] / "src/anonimizator3000/static"
+
+    assert {
+        path.relative_to(static_dir).as_posix()
+        for path in static_dir.rglob("*")
+        if path.is_file()
+    } == {"app.css"}
+
+
+def test_base_delegates_platform_assets_to_product_shell() -> None:
+    template = Path(__file__).resolve().parents[1] / "src/anonimizator3000/templates/base.html"
     base = template.read_text(encoding="utf-8")
+
     assert 'extends "app_factory/product_shell.html"' in base
     assert "basecoat/basecoat" not in base
     assert "htmx.min.js" not in base
+    assert "head_assets" not in base
