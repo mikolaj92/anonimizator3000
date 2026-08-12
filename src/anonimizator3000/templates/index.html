@@ -66,6 +66,13 @@
     </div>
   </div>
 
-  <div id="job-panel" class="result-panel"></div>
+  <div id="job-panel" class="result-panel">
+    {% if job %}
+      {% include "partials/job.html" %}
+    {% elif error_message %}
+      {% set message = error_message %}
+      {% include "partials/error.html" %}
+    {% endif %}
+  </div>
 </section>
 {% endblock %}
