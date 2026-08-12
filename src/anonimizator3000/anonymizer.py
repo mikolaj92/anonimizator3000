@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from threading import local
 from typing import Any, Protocol
 
 from posejdon import TextAnonymizer
@@ -19,7 +20,13 @@ class _BackendMonitor:
     def __init__(self, backend: Any, method_name: str) -> None:
         self._backend = backend
         self._method_name = method_name
-        self.failure: BaseException | None = None
+        self._state = local()
+
+    def reset(self) -> None:
+        self._state.failure = None
+
+    def failure(self) -> Exception | None:
+        return getattr(self._state, "failure", None)
 
     def __getattr__(self, name: str) -> Any:
         attribute = getattr(self._backend, name)
@@ -29,8 +36,8 @@ class _BackendMonitor:
         def monitored(*args: Any, **kwargs: Any) -> Any:
             try:
                 return attribute(*args, **kwargs)
-            except BaseException as error:
-                self.failure = error
+            except Exception as error:
+                self._state.failure = error
                 raise
 
         return monitored
@@ -44,15 +51,16 @@ class _FailClosedDetector:
 
     def detect(self, text: str) -> Any:
         if self._monitor is not None:
-            self._monitor.failure = None
+            self._monitor.reset()
         try:
             result = self._detector.detect(text)
         except Exception as error:
             failure = _DetectorFailure(f"{self.name} failed")
             raise failure from error
-        if self._monitor is not None and self._monitor.failure is not None:
+        backend_failure = self._monitor.failure() if self._monitor is not None else None
+        if backend_failure is not None:
             failure = _DetectorFailure(f"{self.name} failed")
-            raise failure from self._monitor.failure
+            raise failure from backend_failure
         return result
 
 

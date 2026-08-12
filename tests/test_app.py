@@ -21,9 +21,16 @@ from anonimizator3000.upload import UploadError, read_multipart_document
 
 
 @pytest.fixture(autouse=True)
-def _use_regex_only_anonymizer(monkeypatch) -> None:
-    """UI tests do not require optional detector packages or model downloads."""
-    monkeypatch.setattr(main_module, "create_anonymizer", lambda settings: TextAnonymizer())
+def _use_regex_only_anonymizer(monkeypatch, request) -> None:
+    """UI tests do not require detector startup except for its regression test."""
+    if request.node.get_closest_marker("real_anonymizer") is None:
+        monkeypatch.setattr(main_module, "create_anonymizer", lambda settings: TextAnonymizer())
+
+
+@pytest.mark.real_anonymizer
+def test_default_lifespan_starts_with_real_anonymizer() -> None:
+    with TestClient(app) as client:
+        assert client.get("/healthz").status_code == 200
 
 
 def _docx_bytes(text: str) -> bytes:

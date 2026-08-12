@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -108,6 +110,37 @@ def test_detector_errors_are_not_silently_ignored(monkeypatch) -> None:
         instance.anonymize_segments(["Jan Kowalski"], replacement_style="mask")
 
     assert isinstance(error.value.__cause__, ValueError)
+
+
+def test_backend_failures_are_isolated_between_worker_threads(monkeypatch) -> None:
+    successful_call_started = Event()
+    failing_call_finished = Event()
+
+    class ConcurrentBackend:
+        def analyze(self, *, text, language):
+            if text == "fails":
+                assert successful_call_started.wait(timeout=2)
+                failing_call_finished.set()
+                raise ValueError("backend unavailable")
+            successful_call_started.set()
+            assert failing_call_finished.wait(timeout=2)
+            return []
+
+    detector = _posejdon_detector("PresidioDetector", ConcurrentBackend())
+    _StubTextAnonymizer.detectors = [RegexDetector(), detector]
+    monkeypatch.setattr(anonymizer_module, "TextAnonymizer", _StubTextAnonymizer)
+    instance = create_anonymizer(Settings(gliner_enabled=False))
+
+    def anonymize(text: str):
+        return instance.anonymize_segments([text], replacement_style="mask")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        successful = executor.submit(anonymize, "succeeds")
+        failing = executor.submit(anonymize, "fails")
+
+    assert successful.result().texts == ["succeeds"]
+    with pytest.raises(RuntimeError, match="PresidioDetector failed"):
+        failing.result()
 
 
 @pytest.mark.parametrize("name", ["PresidioDetector", "GLiNERDetector"])
