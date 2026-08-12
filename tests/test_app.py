@@ -11,15 +11,19 @@ from zipfile import ZipFile
 import pytest
 from doctotext import DOCX_MIME
 from docx import Document
+from fastapi import Request
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
+from my_auth.passkeys import PasskeyCredential, PasskeyUser, VerifiedRegistration
 from my_usermanager.models import Permission
 from my_usermanager.permissions import ADMIN_ROLE_NAME
 from my_usermanager.sessions import SessionPrincipal, write_session_principal
 from posejdon import TextAnonymizer
 
 import anonimizator3000.main as main_module
+from anonimizator3000.config import Settings
 from anonimizator3000.main import _attachment_header, _settings_boot, app
+from anonimizator3000.passkey_setup import _complete_registration, build_passkey_components
 from anonimizator3000.upload import UploadError, read_multipart_document
 
 
@@ -310,20 +314,79 @@ def test_platform_auth_routes_exist() -> None:
     assert logout.status_code == 303
 
 
-def test_legacy_untyped_session_does_not_authenticate() -> None:
+def test_legacy_untyped_session_does_not_authenticate_existing_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANON_AUTH_DB", str(tmp_path / "auth.sqlite3"))
+    auth_user = PasskeyUser(
+        user_id="audit-user",
+        user_handle=b"audit-user-handle",
+        name="audit_user",
+        display_name="Audit User",
+    )
+    registration = VerifiedRegistration(
+        user=auth_user,
+        credential=PasskeyCredential(
+            credential_id=b"audit-credential",
+            user_id=auth_user.user_id,
+            public_key=b"audit-public-key",
+        ),
+    )
     legacy_session = {
-        "user": {"id": "audit-user", "name": "audit_user", "is_admin": True}
+        "user": {"id": auth_user.user_id, "name": auth_user.name, "is_admin": True}
     }
     payload = base64.b64encode(json.dumps(legacy_session).encode())
     cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
 
     with TestClient(app) as client:
+        existing = _complete_registration(client.app.state.auth_database, registration)
+        assert existing.user_id == auth_user.user_id
         client.cookies.set(_settings_boot.session_cookie_name, cookie)
         account = client.get("/account", follow_redirects=False)
         admin_users = client.get("/admin/users", follow_redirects=False)
 
     assert account.status_code == 303
     assert admin_users.status_code == 303
+
+
+def test_passkey_hooks_ignore_legacy_session_for_existing_user(tmp_path: Path) -> None:
+    from my_usermanager.adapters.my_auth_sqlite import SQLiteAuthDatabase
+
+    database = SQLiteAuthDatabase(tmp_path / "auth.sqlite3")
+    database.initialize()
+    auth_user = PasskeyUser(
+        user_id="audit-user",
+        user_handle=b"audit-user-handle",
+        name="audit_user",
+        display_name="Audit User",
+    )
+    _complete_registration(
+        database,
+        VerifiedRegistration(
+            user=auth_user,
+            credential=PasskeyCredential(
+                credential_id=b"audit-credential",
+                user_id=auth_user.user_id,
+                public_key=b"audit-public-key",
+            ),
+        ),
+    )
+    _, hooks, _ = build_passkey_components(database, Settings())
+    request = Request(
+        {
+            "type": "http",
+            "session": {
+                "user": {
+                    "id": auth_user.user_id,
+                    "name": auth_user.name,
+                    "is_admin": True,
+                }
+            },
+        }
+    )
+
+    assert hooks.get_session_user(request) is None
+    assert hooks.registration_allowed(request) is True
 
 
 @pytest.mark.parametrize("path", ("/login", "/account", "/admin/users"))

@@ -125,6 +125,7 @@ Operator może jawnie wyłączyć GLiNER przez `ANON_GLINER_ENABLED=false`.
 | --- | --- |
 | `AnonUserManagerHooks.get_current_user`: odczyt starego `session["user"]`, gdy brak typed principal | **Usunięto.** Logowanie zapisuje `my_usermanager.principal`; stara sesja nie uwierzytelnia już użytkownika. |
 | `AnonUserManagerHooks.require_admin`: autoryzacja przez stare `session["user"]["is_admin"]` | **Usunięto.** Uprawnienia pochodzą wyłącznie z typed principal. |
+| Hooki passkey `get_session_user` / `registration_allowed`: identyfikacja przez stare `session["user"]` | **Usunięto.** Warstwa passkey rozpoznaje zalogowanego użytkownika wyłącznie przez typed principal; stara sesja jest traktowana jak anonimowa. |
 | `AuthDatabaseBinding` i proxy store'ów | **Promowane.** To jawna granica lifecycle'u: routery są instalowane raz, a lifespan przełącza je na ponownie otwartą bazę SQLite; pokrywają ją testy tras auth. |
 | `_complete_registration`: obsługa `DuplicateUserError` / `DuplicateGrantError` | **Promowane.** To idempotencja powtórzonej ceremonii WebAuthn i równoległego nadania roli pierwszemu użytkownikowi, nie zgodność wsteczna. |
 | `Fala` CPython carrier API | **Pozostaje jawną funkcją produktu.** Migracja jednorazowa do nowego host/sdk wymaga osobnego projektu; granica i przypięta rewizja są opisane wyżej. |
