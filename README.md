@@ -20,6 +20,26 @@ Logika jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 
 `pyproject.toml` wskazuje branche `main`, a `uv.lock` przypina konkretne commity.
 
+### Przepływy AI / analizy (issue #23)
+
+Aplikacja ma jeden przepływ analizy: anonimizację dokumentu. `pipeline.py` nie
+wykonuje jej jako monolitycznego agenta; tworzy run w przypiętym runtime Fala i
+uruchamia graf `DOCUMENT_FLOW`. Każdy węzeł jest osobnym adapterem
+`python_function`, a zależności ustalają kolejność:
+
+| Krok | Wejście ze współdzielonego `JobContext` | Wyjście do kontekstu | Małe wyjście rejestrowane przez Fala |
+| --- | --- | --- | --- |
+| `convert` | nazwa, MIME, bajty źródłowe | nazwa i bajty DOCX | typ źródła, czy wykonano konwersję |
+| `load` | nazwa i bajty DOCX, limit znaków | sparsowany dokument | liczba segmentów i znaków |
+| `anonymize` | tekst dokumentu, styl, `SegmentAnonymizer` | zanonimizowane segmenty i findings | liczby findings według kategorii |
+| `serialize` | dokument i zanonimizowane segmenty | nazwa, MIME i bajty wyniku | metadane pliku i rozmiar |
+| `redact_authors` | bajty wyniku | bajty bez tożsamości autorów | liczba zanonimizowanych autorów |
+
+Ciężkie lub wrażliwe dane pozostają tylko w pamięci procesu i są usuwane po
+runie; przez magazyn Fala przechodzą wyłącznie małe metadane JSON. Kontrakty
+adapterów są typowane w `steps.py`. Nie znaleziono innych przepływów AI ani luk
+wymagających osobnych zadań.
+
 ### Fala compatibility boundary
 
 Anonimizator3000 remains on the immutable legacy `fala-runtime` revision. Its
