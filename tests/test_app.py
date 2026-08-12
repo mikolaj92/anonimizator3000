@@ -311,6 +311,25 @@ def test_host_static_contains_only_product_assets() -> None:
     } == {"app.css"}
 
 
+def test_landing_disclosure_is_native_and_has_an_accessible_relationship() -> None:
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert '<details id="privacy-disclosure" class="info-disclosure">' in response.text
+    assert 'aria-controls="privacy-information"' in response.text
+    assert '<div id="privacy-information" class="info-panel">' in response.text
+
+    templates_dir = (
+        Path(__file__).resolve().parents[1] / "src/anonimizator3000/templates"
+    )
+    host_templates = "\n".join(
+        path.read_text(encoding="utf-8") for path in templates_dir.rglob("*.html")
+    )
+    assert "$store" not in host_templates
+    assert "Alpine.store" not in host_templates
+
+
 def test_base_delegates_platform_chrome_to_product_shell() -> None:
     template = Path(__file__).resolve().parents[1] / "src/anonimizator3000/templates/base.html"
     base = template.read_text(encoding="utf-8")
