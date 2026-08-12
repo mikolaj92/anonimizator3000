@@ -1,5 +1,7 @@
 import base64
+import html
 import json
+import re
 import time
 from datetime import date
 from io import BytesIO
@@ -67,6 +69,7 @@ def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
     with TestClient(app) as client:
         response = client.post(
             "/jobs",
+            headers={"HX-Request": "true"},
             files={
                 "document": (
                     "sample.docx",
@@ -78,10 +81,14 @@ def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
 
         assert response.status_code == 200
         assert 'role="progressbar"' in response.text
+        assert 'id="job-card"' in response.text
+        assert 'id="job-panel"' not in response.text
         job_id = response.text.split("/jobs/", 1)[1].split('"', 1)[0]
 
         for _ in range(50):
-            status_response = client.get(f"/jobs/{job_id}")
+            status_response = client.get(
+                f"/jobs/{job_id}", headers={"HX-Request": "true"}
+            )
             assert status_response.status_code == 200
             if "Gotowe" in status_response.text:
                 assert "textarea" not in status_response.text
@@ -106,6 +113,7 @@ def test_docx_download_keeps_root_namespace_declarations() -> None:
     with TestClient(app) as client:
         response = client.post(
             "/jobs",
+            headers={"HX-Request": "true"},
             files={
                 "document": (
                     "sample.docx",
@@ -117,7 +125,7 @@ def test_docx_download_keeps_root_namespace_declarations() -> None:
         job_id = response.text.split("/jobs/", 1)[1].split('"', 1)[0]
 
         for _ in range(50):
-            status = client.get(f"/jobs/{job_id}")
+            status = client.get(f"/jobs/{job_id}", headers={"HX-Request": "true"})
             if "Gotowe" in status.text:
                 break
             time.sleep(0.05)
@@ -148,15 +156,71 @@ def test_healthz_returns_only_update_date() -> None:
     assert response.text.count("\n") == 1
 
 
-def test_upload_size_limit_returns_fragment() -> None:
+def test_plain_form_upload_redirects_to_server_rendered_job_page() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/jobs",
+            files={"document": ("sample.txt", b"hello", "text/plain")},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        page = client.get(response.headers["location"])
+
+    assert page.status_code == 200
+    assert '<form\n        hx-post="/jobs"' in page.text
+    assert 'id="job-card"' in page.text
+    assert page.text.count('id="job-panel"') == 1
+
+
+def test_plain_form_validation_error_returns_full_page() -> None:
     with TestClient(app) as client:
         response = client.post(
             "/jobs",
             files={"document": ("big.txt", b"x" * 5_200_000, "text/plain")},
         )
 
+    assert response.status_code == 413
+    assert "Odrzucono upload" in response.text
+    assert 'id="job-panel"' in response.text
+    assert '<form\n        hx-post="/jobs"' in response.text
+
+
+def test_upload_size_limit_returns_fragment() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/jobs",
+            headers={"HX-Request": "true"},
+            files={"document": ("big.txt", b"x" * 5_200_000, "text/plain")},
+        )
+
         assert response.status_code == 413
         assert "Odrzucono upload" in response.text
+        assert 'id="job-panel"' not in response.text
+
+
+def test_htmx_config_swaps_client_error_fragments() -> None:
+    with TestClient(app) as client:
+        page = client.get("/")
+        missing_job = client.get(
+            "/jobs/not-a-job", headers={"HX-Request": "true"}
+        )
+
+    match = re.search(
+        r'<meta\s+name="htmx-config"\s+content=\'([^\']+)\'', page.text
+    )
+    assert match is not None
+    response_handling = json.loads(html.unescape(match.group(1)))["responseHandling"]
+
+    for status_code in (413, missing_job.status_code):
+        handling = next(
+            rule
+            for rule in response_handling
+            if re.fullmatch(rule["code"], str(status_code))
+        )
+        assert handling == {"code": "4..", "swap": True, "error": True}
+
+    assert missing_job.status_code == 404
+    assert "Zadanie wygasło albo nie istnieje." in missing_job.text
 
 
 @pytest.mark.asyncio

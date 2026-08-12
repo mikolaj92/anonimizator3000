@@ -5,6 +5,10 @@
 {% block title %}{% block page_title_block %}Dokumenty{% endblock %}{% endblock %}
 
 {% block head_extra %}
+  <meta
+    name="htmx-config"
+    content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"4..","swap":true,"error":true},{"code":"5..","swap":false,"error":true},{"code":"...","swap":false}]}'
+  >
   <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
 {% endblock %}
 

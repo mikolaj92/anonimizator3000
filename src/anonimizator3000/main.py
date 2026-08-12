@@ -6,7 +6,7 @@ from urllib.parse import quote
 import uvicorn
 from app_factory.fastapi import install_app_factory_ui
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from posejdon import TextAnonymizer
@@ -131,11 +131,7 @@ app.add_middleware(
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context=_page_context(request, settings=_settings(request)),
-    )
+    return _index_response(request)
 
 
 @app.post("/jobs", response_class=HTMLResponse)
@@ -158,17 +154,26 @@ async def create_job(request: Request) -> HTMLResponse:
             ),
         )
     except (UploadError, QueueRejected) as error:
-        return _error_fragment(request, str(error), status_code=error.status_code)
+        if _is_htmx(request):
+            return _error_fragment(request, str(error), status_code=error.status_code)
+        return _index_response(request, error_message=str(error), status_code=error.status_code)
 
-    return _job_fragment(request, job)
+    if _is_htmx(request):
+        return _job_fragment(request, job)
+    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
 
 @app.get("/jobs/{job_id}", response_class=HTMLResponse)
 async def get_job(request: Request, job_id: str) -> HTMLResponse:
     job = await _queue(request).get(job_id)
     if job is None:
-        return _error_fragment(request, "Zadanie wygasło albo nie istnieje.", status_code=404)
-    return _job_fragment(request, job)
+        message = "Zadanie wygasło albo nie istnieje."
+        if _is_htmx(request):
+            return _error_fragment(request, message, status_code=404)
+        return _index_response(request, error_message=message, status_code=404)
+    if _is_htmx(request):
+        return _job_fragment(request, job)
+    return _index_response(request, job=job)
 
 
 @app.get("/jobs/{job_id}/download")
@@ -194,6 +199,30 @@ def _version_date() -> str:
     if lock.exists():
         return datetime.fromtimestamp(lock.stat().st_mtime, UTC).date().isoformat()
     return datetime.now(UTC).date().isoformat()
+
+
+def _index_response(
+    request: Request,
+    *,
+    job: JobSnapshot | None = None,
+    error_message: str | None = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context=_page_context(
+            request,
+            settings=_settings(request),
+            job=job,
+            error_message=error_message,
+        ),
+        status_code=status_code,
+    )
+
+
+def _is_htmx(request: Request) -> bool:
+    return request.headers.get("HX-Request", "").lower() == "true"
 
 
 def _job_fragment(request: Request, job: JobSnapshot) -> HTMLResponse:

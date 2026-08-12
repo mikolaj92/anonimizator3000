@@ -76,12 +76,14 @@ def _run_upload(style: str | None) -> str:
     files = {"document": ("sample.docx", _docx_bytes(_SAMPLE), DOCX_MIME)}
     data = {"style": style} if style is not None else None
     with TestClient(app) as client:
-        response = client.post("/jobs", files=files, data=data)
+        response = client.post(
+            "/jobs", files=files, data=data, headers={"HX-Request": "true"}
+        )
         assert response.status_code == 200
         job_id = response.text.split("/jobs/", 1)[1].split('"', 1)[0]
 
         for _ in range(50):
-            status = client.get(f"/jobs/{job_id}")
+            status = client.get(f"/jobs/{job_id}", headers={"HX-Request": "true"})
             assert status.status_code == 200
             if "Gotowe" in status.text:
                 break
