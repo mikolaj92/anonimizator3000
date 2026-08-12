@@ -6,6 +6,7 @@ import logging
 import os
 import secrets
 import uuid
+from contextlib import suppress
 from typing import Any
 
 from app_factory.fastapi import AppFactoryUi
@@ -157,10 +158,8 @@ def _complete_registration(
                 raise
         tx.users.link_external_identity(user_id=user.user_id, identity=identity)
         if first_user:
-            try:
+            with suppress(DuplicateGrantError):
                 tx.grants.add_role_grant(user.user_id, ADMIN_ROLE_NAME, Scope.global_())
-            except DuplicateGrantError:
-                pass
         completed = tx.users.get(user.user_id)
         if completed is None:
             raise RuntimeError("registration user missing after commit")

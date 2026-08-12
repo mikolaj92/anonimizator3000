@@ -13,6 +13,9 @@ from doctotext import DOCX_MIME
 from docx import Document
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
+from my_usermanager.models import Permission
+from my_usermanager.permissions import ADMIN_ROLE_NAME
+from my_usermanager.sessions import SessionPrincipal, write_session_principal
 from posejdon import TextAnonymizer
 
 import anonimizator3000.main as main_module
@@ -25,6 +28,21 @@ def _use_regex_only_anonymizer(monkeypatch, request) -> None:
     """UI tests do not require detector startup except for its regression test."""
     if request.node.get_closest_marker("real_anonymizer") is None:
         monkeypatch.setattr(main_module, "create_anonymizer", lambda settings: TextAnonymizer())
+
+
+def _authenticated_session() -> dict:
+    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    write_session_principal(
+        session,
+        SessionPrincipal(
+            user_id="audit-user",
+            username="audit_user",
+            display_name="Audit User",
+            roles=frozenset({ADMIN_ROLE_NAME}),
+            permissions=frozenset({Permission("admin.access")}),
+        ),
+    )
+    return session
 
 
 @pytest.mark.real_anonymizer
@@ -292,9 +310,25 @@ def test_platform_auth_routes_exist() -> None:
     assert logout.status_code == 303
 
 
+def test_legacy_untyped_session_does_not_authenticate() -> None:
+    legacy_session = {
+        "user": {"id": "audit-user", "name": "audit_user", "is_admin": True}
+    }
+    payload = base64.b64encode(json.dumps(legacy_session).encode())
+    cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
+
+    with TestClient(app) as client:
+        client.cookies.set(_settings_boot.session_cookie_name, cookie)
+        account = client.get("/account", follow_redirects=False)
+        admin_users = client.get("/admin/users", follow_redirects=False)
+
+    assert account.status_code == 303
+    assert admin_users.status_code == 303
+
+
 @pytest.mark.parametrize("path", ("/login", "/account", "/admin/users"))
 def test_platform_ui_shell_loads_same_origin_stack(path: str) -> None:
-    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    session = _authenticated_session()
     payload = base64.b64encode(json.dumps(session).encode())
     cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
 
@@ -366,7 +400,7 @@ def test_base_delegates_platform_chrome_to_product_shell() -> None:
 
 @pytest.mark.parametrize("path", ("/", "/account", "/admin/users"))
 def test_product_surfaces_share_platform_chrome_contract(path: str) -> None:
-    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    session = _authenticated_session()
     payload = base64.b64encode(json.dumps(session).encode())
     cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
 
@@ -399,7 +433,7 @@ def test_invalid_landing_locale_falls_back_to_default() -> None:
 
 
 def test_product_shell_uses_platform_controls_without_logout() -> None:
-    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    session = _authenticated_session()
     payload = base64.b64encode(json.dumps(session).encode())
     cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
 
@@ -414,7 +448,7 @@ def test_product_shell_uses_platform_controls_without_logout() -> None:
 
 
 def test_logout_is_only_rendered_on_account_surface() -> None:
-    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    session = _authenticated_session()
     payload = base64.b64encode(json.dumps(session).encode())
     cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
 
