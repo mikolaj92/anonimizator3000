@@ -32,7 +32,12 @@ def _get_bool(name: str, default: bool) -> bool:
     raw = getenv(name)
     if raw is None:
         return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    candidate = raw.strip().lower()
+    if candidate in {"1", "true", "yes", "on"}:
+        return True
+    if candidate in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
 
 
 def _get_optional_path(name: str) -> str | None:
@@ -40,6 +45,13 @@ def _get_optional_path(name: str) -> str | None:
     if raw is None or not raw.strip():
         return None
     return str(Path(raw.strip()).expanduser())
+
+
+def _get_optional_string(name: str) -> str | None:
+    raw = getenv(name)
+    if raw is None or not raw.strip():
+        return None
+    return raw.strip()
 
 
 @dataclass(frozen=True)
@@ -53,8 +65,8 @@ class Settings:
     rate_limit_window_seconds: int = 600
     job_ttl_seconds: int = 900
     trust_proxy_headers: bool = False
-    gliner_enabled: bool = True
-    gliner_model: str = "urchade/gliner_multi_pii-v1"
+    gliner_enabled: bool = False
+    gliner_model: str | None = None
     gliner_threshold: float = 0.45
     replacement_style: str = DEFAULT_REPLACEMENT_STYLE
     # Shared auth SQLite (my-auth + my-usermanager). None → package default.
@@ -74,7 +86,7 @@ class Settings:
 
 
 def settings_from_env() -> Settings:
-    return Settings(
+    settings = Settings(
         max_file_bytes=_get_int("ANON_MAX_FILE_BYTES", Settings.max_file_bytes),
         max_text_chars=_get_int("ANON_MAX_TEXT_CHARS", Settings.max_text_chars),
         queue_max_size=_get_int("ANON_QUEUE_MAX_SIZE", Settings.queue_max_size),
@@ -91,7 +103,7 @@ def settings_from_env() -> Settings:
         job_ttl_seconds=_get_int("ANON_JOB_TTL_SECONDS", Settings.job_ttl_seconds),
         trust_proxy_headers=_get_bool("ANON_TRUST_PROXY_HEADERS", Settings.trust_proxy_headers),
         gliner_enabled=_get_bool("ANON_GLINER_ENABLED", Settings.gliner_enabled),
-        gliner_model=getenv("ANON_GLINER_MODEL", Settings.gliner_model),
+        gliner_model=_get_optional_string("ANON_GLINER_MODEL"),
         gliner_threshold=float(getenv("ANON_GLINER_THRESHOLD", Settings.gliner_threshold)),
         replacement_style=normalize_replacement_style(
             getenv("ANON_REPLACEMENT_STYLE"), Settings.replacement_style
@@ -110,3 +122,6 @@ def settings_from_env() -> Settings:
         ),
         session_max_age=_get_int("ANON_SESSION_MAX_AGE", Settings.session_max_age),
     )
+    if settings.gliner_enabled and settings.gliner_model is None:
+        raise ValueError("ANON_GLINER_MODEL is required when ANON_GLINER_ENABLED=true")
+    return settings

@@ -102,13 +102,15 @@ GLiNER jest opcjonalny, bo wymaga cięższych zależności i modelu:
 
 ```bash
 uv sync --extra detectors
-ANON_GLINER_ENABLED=true uv run uvicorn anonimizator3000.main:app --reload
+ANON_GLINER_ENABLED=true \
+ANON_GLINER_MODEL=urchade/gliner_multi_pii-v1 \
+uv run uvicorn anonimizator3000.main:app --reload
 ```
 
 Zmienne:
 
 - `ANON_GLINER_ENABLED=false`
-- `ANON_GLINER_MODEL=urchade/gliner_multi_pii-v1`
+- `ANON_GLINER_MODEL` jest wymagany, gdy GLiNER jest włączony
 - `ANON_GLINER_THRESHOLD=0.45`
 
 ## Auth (passkeys + usermanager)
@@ -162,7 +164,7 @@ Domyślne limity można zmienić przez zmienne środowiskowe:
 | `ANON_JOB_TTL_SECONDS` | `900` | Czas trzymania zakończonego wyniku w pamięci |
 | `ANON_TRUST_PROXY_HEADERS` | `false` | Czy ufać `X-Forwarded-For` |
 | `ANON_GLINER_ENABLED` | `false` | Włącza GLiNER |
-| `ANON_GLINER_MODEL` | `urchade/gliner_multi_pii-v1` | Model GLiNER |
+| `ANON_GLINER_MODEL` | *(puste)* | Model GLiNER; wymagany, gdy `ANON_GLINER_ENABLED=true` |
 | `ANON_GLINER_THRESHOLD` | `0.45` | Próg predykcji GLiNER |
 
 `ANON_TRUST_PROXY_HEADERS=true` włączaj tylko za reverse proxy, który czyści i ustawia `X-Forwarded-For`.

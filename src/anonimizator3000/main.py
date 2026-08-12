@@ -9,9 +9,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from posejdon import TextAnonymizer
 from starlette.middleware.sessions import SessionMiddleware
 
+from anonimizator3000.anonymizer import create_anonymizer
 from anonimizator3000.auth_stores import migrate_auth_database
 from anonimizator3000.config import Settings, normalize_replacement_style, settings_from_env
 from anonimizator3000.jobs import DocumentProcessingQueue, JobSnapshot, QueueRejected
@@ -75,11 +75,7 @@ async def lifespan(app: FastAPI):
         binding.update(auth_database)
     app.state.auth_database = auth_database
 
-    anonymizer = TextAnonymizer(
-        gliner_enabled=settings.gliner_enabled,
-        gliner_model=settings.gliner_model,
-        gliner_threshold=settings.gliner_threshold,
-    )
+    anonymizer = create_anonymizer(settings)
     queue = DocumentProcessingQueue(
         anonymizer=anonymizer,
         max_text_chars=settings.max_text_chars,
