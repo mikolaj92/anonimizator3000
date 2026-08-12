@@ -90,6 +90,16 @@ def create_anonymizer(settings: Settings) -> SegmentAnonymizer:
         names = ", ".join(unavailable)
         raise RuntimeError(f"Posejdon failed to initialize required detectors: {names}")
 
+    presidio = detectors["PresidioDetector"]
+    presidio_languages = getattr(presidio._engine, "supported_languages", None)
+    if presidio_languages is not None and presidio.language not in presidio_languages:
+        # Presidio's packaged registry is English-only. Its pattern recognizers
+        # still cover language-independent values in Polish documents, while
+        # Posejdon's regex detector supplies the Polish-specific rules.
+        if "en" not in presidio_languages:
+            raise RuntimeError("Posejdon PresidioDetector has no supported language")
+        presidio.language = "en"
+
     backend_methods = {
         "PresidioDetector": ("_engine", "analyze"),
         "GLiNERDetector": ("_model", "predict_entities"),
