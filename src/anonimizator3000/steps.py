@@ -18,10 +18,11 @@ from collections import Counter
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TypedDict
 from zipfile import ZipFile
 
 from doctotext import DOCX_MIME, PDF_MIME, DocumentError, document_to_bytes, load_document
+from fala.adapters import StepRunRequest
 from posejdon import ReplacementKind
 
 from anonimizator3000.config import DEFAULT_REPLACEMENT_STYLE, normalize_replacement_style
@@ -52,6 +53,30 @@ class SegmentAnonymizer(Protocol):
     def anonymize_segments(
         self, texts: list[str], *, replacement_style: ReplacementKind
     ) -> Any: ...
+
+
+class ConvertOutput(TypedDict):
+    source_kind: str
+    converted: bool
+
+
+class LoadOutput(TypedDict):
+    segment_count: int
+    total_chars: int
+
+
+class AnonymizeOutput(TypedDict):
+    findings: dict[str, int]
+
+
+class SerializeOutput(TypedDict):
+    filename: str
+    content_type: str
+    size: int
+
+
+class RedactAuthorsOutput(TypedDict):
+    authors_redacted: int
 
 
 @dataclass
@@ -92,8 +117,8 @@ def discard_job(run_id: str) -> None:
     _REGISTRY.pop(run_id, None)
 
 
-def convert(request: Any) -> dict[str, Any]:
-    """Normalize the input to DOCX bytes: passthrough for DOCX, pdf2docx for PDF."""
+def convert(request: StepRunRequest) -> ConvertOutput:
+    """Read source fields and produce DOCX fields plus source-kind metadata."""
     context = job_context(request.run_id)
     name = Path(context.filename or "dokument").name
     kind = _document_kind(name, context.content_type)
@@ -106,8 +131,8 @@ def convert(request: Any) -> dict[str, Any]:
     return {"source_kind": "pdf", "converted": True}
 
 
-def load(request: Any) -> dict[str, Any]:
-    """Extract the DOCX text segments and enforce the size limits."""
+def load(request: StepRunRequest) -> LoadOutput:
+    """Read DOCX fields, store a parsed document, and return text-size metadata."""
     context = job_context(request.run_id)
     document = load_document(context.docx_filename, DOCX_MIME, context.docx_bytes)
     total_chars = sum(len(text) for text in document.texts)
@@ -121,8 +146,8 @@ def load(request: Any) -> dict[str, Any]:
     return {"segment_count": len(document.texts), "total_chars": total_chars}
 
 
-def anonymize(request: Any) -> dict[str, Any]:
-    """Detect and replace PII across the extracted segments (Posejdon)."""
+def anonymize(request: StepRunRequest) -> AnonymizeOutput:
+    """Read parsed text, store anonymized text, and return finding counts."""
     context = job_context(request.run_id)
     kind = _STYLE_TO_KIND[normalize_replacement_style(context.replacement_style)]
     result = context.anonymizer.anonymize_segments(
@@ -133,8 +158,8 @@ def anonymize(request: Any) -> dict[str, Any]:
     return {"findings": context.findings}
 
 
-def serialize(request: Any) -> dict[str, Any]:
-    """Write the anonymized segments back into the DOCX and produce bytes."""
+def serialize(request: StepRunRequest) -> SerializeOutput:
+    """Read anonymized text, store result bytes, and return file metadata."""
     context = job_context(request.run_id)
     context.document.apply_texts(context.anonymized_texts)
     result = document_to_bytes(context.document, context.docx_filename)
@@ -148,8 +173,8 @@ def serialize(request: Any) -> dict[str, Any]:
     }
 
 
-def redact_authors(request: Any) -> dict[str, Any]:
-    """Pseudonymize author identity in DOCX metadata (comments, revisions, people)."""
+def redact_authors(request: StepRunRequest) -> RedactAuthorsOutput:
+    """Read result bytes, redact author metadata, and return the identity count."""
     context = job_context(request.run_id)
     context.result_bytes, redacted = _redact_author_metadata(context.result_bytes)
     return {"authors_redacted": redacted}
