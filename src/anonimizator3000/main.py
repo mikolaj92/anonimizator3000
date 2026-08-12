@@ -254,12 +254,8 @@ def _client_ip(request: Request, settings: Settings) -> str:
 
 def _attachment_header(filename: str) -> str:
     safe_name = filename.replace("\\", "/").rsplit("/", 1)[-1].strip() or "download"
-    fallback = "".join(
-        char if 32 <= ord(char) < 127 and char not in {'"', "\\", ";"} else "_"
-        for char in safe_name
-    ).strip(" .") or "download"
     encoded = quote(safe_name, safe="")
-    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
+    return f"attachment; filename*=UTF-8''{encoded}"
 
 
 def _settings(request: Request) -> Settings:
