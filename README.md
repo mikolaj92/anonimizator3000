@@ -98,18 +98,26 @@ Regex/walidacja obejmuje między innymi:
 - sygnatury spraw i numery umów
 - IP, MAC, UUID, VIN, JWT, bearer/API tokens
 
-GLiNER jest opcjonalny, bo wymaga cięższych zależności i modelu:
+GLiNER jest domyślnie włączony z modelem `urchade/gliner_multi_pii-v1` i wymaga
+cięższych zależności:
 
 ```bash
 uv sync --extra detectors
-ANON_GLINER_ENABLED=true uv run uvicorn anonimizator3000.main:app --reload
+uv run uvicorn anonimizator3000.main:app --reload
 ```
 
-Zmienne:
+Brak modelu lub backendu zatrzymuje start aplikacji zamiast uruchamiać słabszy stos.
+Operator może jawnie wyłączyć GLiNER przez `ANON_GLINER_ENABLED=false`.
 
-- `ANON_GLINER_ENABLED=false`
-- `ANON_GLINER_MODEL=urchade/gliner_multi_pii-v1`
-- `ANON_GLINER_THRESHOLD=0.45`
+### Audyt cichych fallbacków AI (issue #21)
+
+| Ścieżka | Wynik audytu / zabezpieczenie |
+| --- | --- |
+| Inicjalizacja detektorów Posejdon | Posejdon pomija błędy Presidio i GLiNER; `create_anonymizer` wymaga całego skonfigurowanego stosu i przerywa start przy braku detektora lub backendu. |
+| Wywołania backendów Presidio i GLiNER | Detektory Posejdon zamieniają wyjątek backendu na pusty wynik; monitor w `anonymizer.py` wykrywa ten przypadek i przerywa zadanie. |
+| Wybór/fallback modelu GLiNER | Aplikacja przekazuje wyłącznie skonfigurowany model i sprawdza jego dostępność; nie wybiera modelu zastępczego. |
+| Klient LLM i reviewer | Aplikacja ich nie tworzy, a kompatybilny `TextAnonymizer` Posejdona ma review LLM wyłączone; brak ścieżki do naprawy w tym repozytorium. |
+| Syntetyczny sukces AI | Nie znaleziono; wynik powstaje tylko po wykonaniu detektorów, a ich błędy kończą zadanie błędem. |
 
 ## Auth (passkeys + usermanager)
 
@@ -161,8 +169,8 @@ Domyślne limity można zmienić przez zmienne środowiskowe:
 | `ANON_RATE_LIMIT_WINDOW_SECONDS` | `600` | Okno limitu per IP |
 | `ANON_JOB_TTL_SECONDS` | `900` | Czas trzymania zakończonego wyniku w pamięci |
 | `ANON_TRUST_PROXY_HEADERS` | `false` | Czy ufać `X-Forwarded-For` |
-| `ANON_GLINER_ENABLED` | `false` | Włącza GLiNER |
-| `ANON_GLINER_MODEL` | `urchade/gliner_multi_pii-v1` | Model GLiNER |
+| `ANON_GLINER_ENABLED` | `true` | Włącza GLiNER; `false` jest jawną zgodą na słabszy stos |
+| `ANON_GLINER_MODEL` | `urchade/gliner_multi_pii-v1` | Model GLiNER; nie może być pusty, gdy GLiNER jest włączony |
 | `ANON_GLINER_THRESHOLD` | `0.45` | Próg predykcji GLiNER |
 
 `ANON_TRUST_PROXY_HEADERS=true` włączaj tylko za reverse proxy, który czyści i ustawia `X-Forwarded-For`.

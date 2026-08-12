@@ -13,9 +13,30 @@ from doctotext import DOCX_MIME
 from docx import Document
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
+from posejdon import TextAnonymizer
 
+import anonimizator3000.main as main_module
 from anonimizator3000.main import _attachment_header, _settings_boot, app
 from anonimizator3000.upload import UploadError, read_multipart_document
+
+
+@pytest.fixture(autouse=True)
+def _use_regex_only_anonymizer(monkeypatch, request) -> None:
+    """UI tests do not require detector startup except for its regression test."""
+    if request.node.get_closest_marker("real_anonymizer") is None:
+        monkeypatch.setattr(main_module, "create_anonymizer", lambda settings: TextAnonymizer())
+
+
+@pytest.mark.real_anonymizer
+def test_default_lifespan_anonymizes_gliner_only_pii_with_real_stack() -> None:
+    with TestClient(app) as client:
+        assert client.get("/healthz").status_code == 200
+        result = client.app.state.queue._anonymizer.anonymize_segments(
+            ["Spotkanie z Mikołajem Brzęczyszczykiewiczem."], replacement_style="mask"
+        )
+
+    assert "Mikołajem Brzęczyszczykiewiczem" not in result.texts[0]
+    assert result.findings["PERSON"] >= 1
 
 
 def _docx_bytes(text: str) -> bytes:

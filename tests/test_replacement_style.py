@@ -5,7 +5,9 @@ import pytest
 from doctotext import DOCX_MIME, load_document
 from docx import Document
 from fastapi.testclient import TestClient
+from posejdon import TextAnonymizer
 
+import anonimizator3000.main as main_module
 from anonimizator3000.config import (
     DEFAULT_REPLACEMENT_STYLE,
     normalize_replacement_style,
@@ -14,6 +16,12 @@ from anonimizator3000.config import (
 from anonimizator3000.main import app
 
 _SAMPLE = "Jan Kowalski ma PESEL 44051401359."
+
+
+@pytest.fixture(autouse=True)
+def _use_regex_only_anonymizer(monkeypatch) -> None:
+    """Replacement tests exercise regex findings, not optional detector setup."""
+    monkeypatch.setattr(main_module, "create_anonymizer", lambda settings: TextAnonymizer())
 
 
 def _docx_bytes(text: str) -> bytes:
