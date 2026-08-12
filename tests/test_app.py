@@ -247,7 +247,7 @@ def test_host_static_contains_only_product_assets() -> None:
     } == {"app.css"}
 
 
-def test_base_delegates_platform_assets_to_product_shell() -> None:
+def test_base_delegates_platform_chrome_to_product_shell() -> None:
     template = Path(__file__).resolve().parents[1] / "src/anonimizator3000/templates/base.html"
     base = template.read_text(encoding="utf-8")
 
@@ -255,3 +255,35 @@ def test_base_delegates_platform_assets_to_product_shell() -> None:
     assert "basecoat/basecoat" not in base
     assert "htmx.min.js" not in base
     assert "head_assets" not in base
+    assert "platform_theme_locale" not in base
+    assert "platform_sidebar" not in base
+    assert "platform_session" not in base
+
+
+def test_product_shell_uses_platform_controls_without_logout() -> None:
+    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    payload = base64.b64encode(json.dumps(session).encode())
+    cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
+
+    with TestClient(app) as client:
+        client.cookies.set(_settings_boot.session_cookie_name, cookie)
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "data-platform-theme-locale" in response.text
+    assert "data-platform-account-link" in response.text
+    assert 'action="/logout"' not in response.text
+
+
+def test_logout_is_only_rendered_on_account_surface() -> None:
+    session = {"user": {"id": "audit-user", "name": "audit_user", "is_admin": True}}
+    payload = base64.b64encode(json.dumps(session).encode())
+    cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
+
+    with TestClient(app) as client:
+        client.cookies.set(_settings_boot.session_cookie_name, cookie)
+        response = client.get("/account")
+
+    assert response.status_code == 200
+    assert "data-platform-session" in response.text
+    assert 'action="/logout"' in response.text
