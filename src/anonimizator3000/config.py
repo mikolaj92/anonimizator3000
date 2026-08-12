@@ -47,9 +47,11 @@ def _get_optional_path(name: str) -> str | None:
     return str(Path(raw.strip()).expanduser())
 
 
-def _get_optional_string(name: str) -> str | None:
+def _get_optional_string(name: str, default: str | None = None) -> str | None:
     raw = getenv(name)
-    if raw is None or not raw.strip():
+    if raw is None:
+        return default
+    if not raw.strip():
         return None
     return raw.strip()
 
@@ -65,8 +67,8 @@ class Settings:
     rate_limit_window_seconds: int = 600
     job_ttl_seconds: int = 900
     trust_proxy_headers: bool = False
-    gliner_enabled: bool = False
-    gliner_model: str | None = None
+    gliner_enabled: bool = True
+    gliner_model: str | None = "urchade/gliner_multi_pii-v1"
     gliner_threshold: float = 0.45
     replacement_style: str = DEFAULT_REPLACEMENT_STYLE
     # Shared auth SQLite (my-auth + my-usermanager). None → package default.
@@ -103,7 +105,7 @@ def settings_from_env() -> Settings:
         job_ttl_seconds=_get_int("ANON_JOB_TTL_SECONDS", Settings.job_ttl_seconds),
         trust_proxy_headers=_get_bool("ANON_TRUST_PROXY_HEADERS", Settings.trust_proxy_headers),
         gliner_enabled=_get_bool("ANON_GLINER_ENABLED", Settings.gliner_enabled),
-        gliner_model=_get_optional_string("ANON_GLINER_MODEL"),
+        gliner_model=_get_optional_string("ANON_GLINER_MODEL", Settings.gliner_model),
         gliner_threshold=float(getenv("ANON_GLINER_THRESHOLD", Settings.gliner_threshold)),
         replacement_style=normalize_replacement_style(
             getenv("ANON_REPLACEMENT_STYLE"), Settings.replacement_style

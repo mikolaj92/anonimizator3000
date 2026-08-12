@@ -28,15 +28,15 @@ def _use_regex_only_anonymizer(monkeypatch, request) -> None:
 
 
 @pytest.mark.real_anonymizer
-def test_default_lifespan_anonymizes_with_real_detector_stack() -> None:
+def test_default_lifespan_anonymizes_gliner_only_pii_with_real_stack() -> None:
     with TestClient(app) as client:
         assert client.get("/healthz").status_code == 200
         result = client.app.state.queue._anonymizer.anonymize_segments(
-            ["Kontakt: jan.kowalski@example.com"], replacement_style="mask"
+            ["Spotkanie z Mikołajem Brzęczyszczykiewiczem."], replacement_style="mask"
         )
 
-    assert result.texts == ["Kontakt: ****"]
-    assert result.findings["EMAIL"] == 1
+    assert "Mikołajem Brzęczyszczykiewiczem" not in result.texts[0]
+    assert result.findings["PERSON"] >= 1
 
 
 def _docx_bytes(text: str) -> bytes:
