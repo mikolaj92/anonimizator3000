@@ -22,9 +22,9 @@ from my_usermanager.adapters.fastapi_htmx import (
 )
 from my_usermanager.adapters.my_auth import MY_AUTH_PROVIDER
 from my_usermanager.adapters.my_auth_sqlite import SQLiteAuthDatabase
-from my_usermanager.memory import MemoryRoleStore
 from my_usermanager.admin import AdminUserGrantSummary, GrantAdminService, UnsafeGrantMutationError
 from my_usermanager.manager import UserManager, UserProfileUpdate
+from my_usermanager.memory import MemoryRoleStore
 from my_usermanager.models import Permission, ValidationError
 from my_usermanager.permissions import ADMIN_ROLE_NAME, BUILTIN_ROLES
 from my_usermanager.sessions import read_session_principal
@@ -137,17 +137,7 @@ class AnonUserManagerHooks:
             return None
         principal = read_session_principal(request.session)
         if principal is None:
-            session_user = request.session.get("user")
-            if not isinstance(session_user, dict) or not session_user.get("id"):
-                return None
-            user_id = str(session_user["id"])
-            return AuthenticatedSubject(
-                provider=MY_AUTH_PROVIDER,
-                subject=user_id,
-                user_id=user_id,
-                username=str(session_user.get("name") or user_id),
-                display_name=str(session_user.get("name") or user_id),
-            )
+            return None
         return AuthenticatedSubject(
             provider=MY_AUTH_PROVIDER,
             subject=principal.user_id,
@@ -166,18 +156,11 @@ class AnonUserManagerHooks:
             )
         principal = read_session_principal(request.session)
         if principal is not None:
-            is_admin = ADMIN_ROLE_NAME in principal.roles or any(
-                getattr(p, "name", None) == "admin.access" for p in principal.permissions
-            )
+            is_admin = ADMIN_ROLE_NAME in principal.roles or Permission(
+                "admin.access"
+            ) in principal.permissions
             if is_admin and principal.user_id == current_user.user_id:
                 return
-        session_user = request.session.get("user")
-        if (
-            isinstance(session_user, dict)
-            and session_user.get("is_admin")
-            and session_user.get("id") == current_user.user_id
-        ):
-            return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="admin.access required",

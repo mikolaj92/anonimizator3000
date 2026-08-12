@@ -6,6 +6,7 @@ import logging
 import os
 import secrets
 import uuid
+from contextlib import suppress
 from typing import Any
 
 from app_factory.fastapi import AppFactoryUi
@@ -26,7 +27,11 @@ from my_usermanager.models import (
     validate_identifier,
 )
 from my_usermanager.permissions import ADMIN_ROLE_NAME
-from my_usermanager.sessions import SessionPrincipal, write_session_principal
+from my_usermanager.sessions import (
+    SessionPrincipal,
+    read_session_principal,
+    write_session_principal,
+)
 from my_usermanager.stores import DuplicateGrantError, DuplicateUserError, UserQuery
 
 from anonimizator3000.config import Settings
@@ -157,10 +162,8 @@ def _complete_registration(
                 raise
         tx.users.link_external_identity(user_id=user.user_id, identity=identity)
         if first_user:
-            try:
+            with suppress(DuplicateGrantError):
                 tx.grants.add_role_grant(user.user_id, ADMIN_ROLE_NAME, Scope.global_())
-            except DuplicateGrantError:
-                pass
         completed = tx.users.get(user.user_id)
         if completed is None:
             raise RuntimeError("registration user missing after commit")
@@ -233,16 +236,14 @@ def build_passkey_components(
     def get_session_user(request: Request) -> PasskeyUser | None:
         if "session" not in request.scope:
             return None
-        session_user = request.session.get("user")
-        user_id = session_user.get("id") if isinstance(session_user, dict) else None
-        return get_auth_user(user_id) if isinstance(user_id, str) else None
+        principal = read_session_principal(request.session)
+        return get_auth_user(principal.user_id) if principal is not None else None
 
     def registration_allowed(request: Request) -> bool:
         if "session" not in request.scope:
             return True
-        session_user = request.session.get("user")
-        user_id = session_user.get("id") if isinstance(session_user, dict) else None
-        return not isinstance(user_id, str) or get_auth_user(user_id) is not None
+        principal = read_session_principal(request.session)
+        return principal is None or get_auth_user(principal.user_id) is not None
 
     def render_login(request: Request):
         del request

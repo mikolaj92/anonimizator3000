@@ -119,6 +119,18 @@ Operator może jawnie wyłączyć GLiNER przez `ANON_GLINER_ENABLED=false`.
 | Klient LLM i reviewer | Aplikacja ich nie tworzy, a kompatybilny `TextAnonymizer` Posejdona ma review LLM wyłączone; brak ścieżki do naprawy w tym repozytorium. |
 | Syntetyczny sukces AI | Nie znaleziono; wynik powstaje tylko po wykonaniu detektorów, a ich błędy kończą zadanie błędem. |
 
+### Inwentaryzacja rzadkich ścieżek zgodności (issue #22)
+
+| Symbol / ścieżka | Decyzja |
+| --- | --- |
+| `AnonUserManagerHooks.get_current_user`: odczyt starego `session["user"]`, gdy brak typed principal | **Usunięto.** Logowanie zapisuje `my_usermanager.principal`; stara sesja nie uwierzytelnia już użytkownika. |
+| `AnonUserManagerHooks.require_admin`: autoryzacja przez stare `session["user"]["is_admin"]` | **Usunięto.** Uprawnienia pochodzą wyłącznie z typed principal. |
+| Hooki passkey `get_session_user` / `registration_allowed`: identyfikacja przez stare `session["user"]` | **Usunięto.** Warstwa passkey rozpoznaje zalogowanego użytkownika wyłącznie przez typed principal; stara sesja jest traktowana jak anonimowa. |
+| `AuthDatabaseBinding` i proxy store'ów | **Promowane.** To jawna granica lifecycle'u: routery są instalowane raz, a lifespan przełącza je na ponownie otwartą bazę SQLite; pokrywają ją testy tras auth. |
+| `_complete_registration`: obsługa `DuplicateUserError` / `DuplicateGrantError` | **Promowane.** To idempotencja powtórzonej ceremonii WebAuthn i równoległego nadania roli pierwszemu użytkownikowi, nie zgodność wsteczna. |
+| `Fala` CPython carrier API | **Pozostaje jawną funkcją produktu.** Migracja jednorazowa do nowego host/sdk wymaga osobnego projektu; granica i przypięta rewizja są opisane wyżej. |
+| Konwersja PDF bez bezpiecznego dopasowania redakcji | **Promowana.** Fail-closed zastępuje tekst strony, aby nie ujawnić PII; zachowanie należy do `DocToText` i jest opisane w „Obsługiwane wejście”. |
+
 ## Auth (passkeys + usermanager)
 
 Portal używa wspólnego stacku platformy: `my-auth` (passkeys WebAuthn) i `my-usermanager` (konta, role, `/account`, `/admin/users`).
