@@ -5,19 +5,32 @@ from __future__ import annotations
 import logging
 import os
 import secrets
+import sqlite3
 import uuid
 from contextlib import suppress
-from typing import Any
+from typing import Any, Literal
 
 from app_factory.fastapi import AppFactoryUi
 from app_factory.platform import apply_platform_context
 from fastapi import FastAPI, HTTPException, Request
-from my_auth import PasskeyConfig, PasskeyService, SQLiteChallengeStore, SQLiteCredentialStore
+from my_auth import (
+    EnrollmentCapabilityNotFound,
+    PasskeyConfig,
+    PasskeyService,
+    SQLiteChallengeStore,
+    SQLiteCredentialStore,
+    SQLiteEnrollmentCapabilityStore,
+    registration_context_from_capability,
+)
 from my_auth.fastapi import PasskeyCookies, PasskeyRouteHooks
 from my_auth.fastapi_htmx import PasskeyUi, PasskeyUiConfig, install_passkey_ui
-from my_auth.passkeys import PasskeyUser, VerifiedRegistration
+from my_auth.passkeys import PasskeyUser, RegistrationContext, VerifiedRegistration
 from my_usermanager.adapters.my_auth import MY_AUTH_PROVIDER
 from my_usermanager.adapters.my_auth_sqlite import SQLiteAuthDatabase
+from my_usermanager.adapters.sqlite_invitations import SQLiteInvitationStore
+from my_usermanager.invitations import InvitationActivation, InvitationError, InvitationService
+from my_usermanager.manager import UserManager
+from my_usermanager.memory import MemoryAuditStore, MemoryRoleStore
 from my_usermanager.models import (
     ExternalIdentity,
     Grant,
@@ -38,6 +51,7 @@ from anonimizator3000.config import Settings
 from anonimizator3000.platform_chrome import (
     DEFAULT_LOCALE,
     LOCALE_COOKIE_NAME,
+    PASSKEY_PATHS,
     SUPPORTED_LOCALES,
     login_platform_config,
 )
@@ -134,16 +148,89 @@ def session_csrf_token(request: Request) -> str | None:
     return token
 
 
+def _resolved_database(
+    auth_database: SQLiteAuthDatabase | AuthDatabaseBinding,
+) -> SQLiteAuthDatabase:
+    if isinstance(auth_database, AuthDatabaseBinding):
+        return auth_database.current
+    return auth_database
+
+
+def _passkey_user_from_account(user: User) -> PasskeyUser:
+    return PasskeyUser(
+        user_id=user.user_id,
+        user_handle=uuid.uuid4().bytes,
+        name=user.username,
+        display_name=user.display_name or user.username,
+    )
+
+
+def _activate_invited_user(
+    database: SQLiteAuthDatabase, result: VerifiedRegistration
+) -> User:
+    """Link the verified passkey to the pending invited account."""
+    identity = ExternalIdentity(provider=MY_AUTH_PROVIDER, subject=result.user.user_id)
+    conn = sqlite3.connect(database.database, timeout=30, check_same_thread=False)
+    try:
+        invitations = SQLiteInvitationStore(conn)
+        pending = invitations.get_pending_for_user(result.user.user_id)
+        if pending is None:
+            raise InvitationError
+        stores = database.stores()
+        try:
+            service = InvitationService(
+                manager=UserManager(
+                    users=stores.users,
+                    roles=MemoryRoleStore(),
+                    grants=stores.grants,
+                ),
+                users=stores.users,
+                identities=stores.users,
+                invitations=invitations,
+                enrollment=_enrollment_issuer(database),
+                audit=MemoryAuditStore(),
+            )
+            return service.activate(
+                InvitationActivation(
+                    invitation_id=pending.invitation_id,
+                    capability_id=pending.capability_id,
+                    identity=identity,
+                )
+            )
+        finally:
+            stores.close()
+    finally:
+        conn.close()
+
+
+def _enrollment_issuer(database: SQLiteAuthDatabase):
+    from my_usermanager.adapters.my_auth_enrollment import (
+        build_enrollment_capability_issuer,
+    )
+
+    return build_enrollment_capability_issuer(
+        SQLiteEnrollmentCapabilityStore(database.database)
+    )
+
+
 def _complete_registration(
     auth_database: SQLiteAuthDatabase | AuthDatabaseBinding,
     result: VerifiedRegistration,
 ) -> User:
     """Persist a verified registration; first user becomes admin."""
-    database = (
-        auth_database.current
-        if isinstance(auth_database, AuthDatabaseBinding)
-        else auth_database
-    )
+    database = _resolved_database(auth_database)
+    kind = result.context.kind if result.context is not None else "bootstrap"
+    if kind == "invitation":
+        with database.transaction() as tx:
+            tx.external_store(SQLiteCredentialStore).save_registration(result)
+        return _activate_invited_user(database, result)
+    if kind == "recovery":
+        with database.transaction() as tx:
+            tx.external_store(SQLiteCredentialStore).save_registration(result)
+            completed = tx.users.get(result.user.user_id)
+            if completed is None or not completed.is_active:
+                raise RuntimeError("recovery user missing after commit")
+            return completed
     username = _require_username(result.user.name)
     user = User(
         user_id=result.user.user_id,
@@ -199,17 +286,66 @@ def build_passkey_components(
         )
 
     def complete_registration(
-        _request: Request, result: VerifiedRegistration
+        request: Request, result: VerifiedRegistration
     ) -> PasskeyUser | None:
         user = _complete_registration(binding, result)
+        if result.context is not None and result.context.kind in {
+            "invitation",
+            "recovery",
+        }:
+            flow_id = request.cookies.get(PasskeyCookies().registration_challenge)
+            if flow_id:
+                try:
+                    SQLiteEnrollmentCapabilityStore(binding.current.database).consume(
+                        flow_id=flow_id
+                    )
+                except Exception:
+                    logger.exception("failed to consume enrollment capability")
         return credential_store.get_user(user.user_id)
 
     def get_auth_user(user_id: str) -> PasskeyUser | None:
         identity = ExternalIdentity(provider=MY_AUTH_PROVIDER, subject=user_id)
         user = user_store.resolve_external_identity(identity)
-        if user is None or user.disabled or user.user_id != user_id:
+        if user is None or not user.is_active or user.user_id != user_id:
             return None
         return credential_store.get_user(user_id)
+
+    def prepare_capability_registration_context(
+        _request: Request,
+        flow_id: str,
+        kind: Literal["invitation", "recovery"],
+        capability: str,
+    ) -> RegistrationContext:
+        store = SQLiteEnrollmentCapabilityStore(binding.current.database)
+        purpose = "invitation" if kind == "invitation" else "account_recovery"
+        record = store.claim(
+            token=capability, flow_id=flow_id, expected_purpose=purpose
+        )
+        if kind == "invitation":
+            invited = user_store.get(record.subject)
+            if invited is None or invited.status != "pending":
+                raise EnrollmentCapabilityNotFound(
+                    "enrollment capability is unavailable"
+                )
+            passkey_user = _passkey_user_from_account(invited)
+        else:
+            passkey_user = credential_store.get_user(record.subject)
+            recovered = user_store.get(record.subject)
+            if (
+                passkey_user is None
+                or recovered is None
+                or not recovered.is_active
+            ):
+                raise EnrollmentCapabilityNotFound(
+                    "enrollment capability is unavailable"
+                )
+        return registration_context_from_capability(
+            kind=kind,
+            user=passkey_user,
+            capability_id=record.capability_id,
+            capability_subject=record.subject,
+            capability_purpose=record.purpose,
+        )
 
     def principal_for(user: User) -> SessionPrincipal:
         grants = grant_store.list_grants_for_user(user.user_id)
@@ -263,6 +399,7 @@ def build_passkey_components(
         registration_allowed=registration_allowed,
         render_login=render_login,
         render_register=render_register,
+        prepare_capability_registration_context=prepare_capability_registration_context,
     )
     return service, hooks, binding
 
@@ -282,6 +419,7 @@ def install_passkey_routes(
         service=service,
         hooks=hooks,
         config=PasskeyUiConfig(
+            paths=PASSKEY_PATHS,
             cookies=PasskeyCookies(
                 secure=settings.session_cookie_secure,
                 samesite="lax",
@@ -289,6 +427,8 @@ def install_passkey_routes(
             csrf_token=session_csrf_token,
             login_success_url="/",
             register_success_url="/",
+            activation_success_url="/account",
+            recovery_success_url="/login",
             locale_cookie_name=LOCALE_COOKIE_NAME,
             locale_query_param="lang",
             supported_locales=SUPPORTED_LOCALES,

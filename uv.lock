@@ -3,11 +3,7 @@ revision = 3
 requires-python = ">=3.12, <3.14"
 
 [manifest]
-overrides = [
-    { name = "app-factory", git = "https://github.com/mikolaj92/app-factory?tag=v0.5.19" },
-    { name = "my-auth", git = "https://github.com/mikolaj92/my-auth?tag=v0.3.23" },
-    { name = "my-usermanager", git = "https://github.com/mikolaj92/my-usermanager?tag=v0.4.5" },
-]
+overrides = [{ name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.5" }]
 
 [[package]]
 name = "annotated-doc"
@@ -32,17 +28,16 @@ name = "anonimizator3000"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "app-factory" },
+    { name = "app-factory", extra = ["platform"] },
     { name = "doctotext" },
     { name = "en-core-web-lg" },
     { name = "fala-runtime" },
     { name = "fastapi" },
     { name = "itsdangerous" },
     { name = "jinja2" },
-    { name = "my-auth" },
-    { name = "my-usermanager" },
+    { name = "my-auth", extra = ["fastapi-htmx"] },
+    { name = "my-usermanager", extra = ["fastapi-htmx", "myauth"] },
     { name = "pdf2docx" },
-    { name = "pip" },
     { name = "posejdon" },
     { name = "presidio-analyzer" },
     { name = "pydantic" },
@@ -68,17 +63,16 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.5.19" },
+    { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.5" },
     { name = "doctotext", git = "https://github.com/mikolaj92/DocToText.git?rev=33aaf6071f45cae8f33ad97fe4b40ffd0f1fd18a" },
     { name = "en-core-web-lg", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" },
     { name = "fala-runtime", git = "https://github.com/mikolaj92/Fala.git?rev=6dd634d18b4812faed04897426bc69322ef59c34" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "my-auth", extras = ["fastapi-htmx"], git = "https://github.com/mikolaj92/my-auth?tag=v0.3.23" },
-    { name = "my-usermanager", extras = ["fastapi", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.4.5" },
+    { name = "my-auth", extras = ["fastapi-htmx"], git = "https://github.com/mikolaj92/my-auth?tag=v0.4.2" },
+    { name = "my-usermanager", extras = ["fastapi-htmx", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.4" },
     { name = "pdf2docx", specifier = ">=0.5.8" },
-    { name = "pip", specifier = ">=25.0" },
     { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
     { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
     { name = "presidio-analyzer", specifier = ">=2.2.0" },
@@ -114,10 +108,16 @@ wheels = [
 
 [[package]]
 name = "app-factory"
-version = "0.5.19"
-source = { git = "https://github.com/mikolaj92/app-factory?tag=v0.5.19#7886608b85862bcd38d20c6f9261b7d1d37fad78" }
+version = "0.6.5"
+source = { git = "https://github.com/mikolaj92/app-factory?tag=v0.6.5#18edb324de8737537b085592ed9a76bb8484cc0a" }
 dependencies = [
     { name = "jinja2" },
+]
+
+[package.optional-dependencies]
+platform = [
+    { name = "fastapi" },
+    { name = "starlette" },
 ]
 
 [[package]]
@@ -375,34 +375,34 @@ wheels = [
 
 [package.optional-dependencies]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-cuda-runtime" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-cufft" },
 ]
 cufile = [
-    { name = "nvidia-cufile", marker = "sys_platform == 'linux'" },
+    { name = "nvidia-cufile" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-cuda-cupti" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-curand" },
 ]
 cusolver = [
-    { name = "nvidia-cusolver", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-cusolver" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-cusparse" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-nvjitlink" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-cuda-nvrtc" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "nvidia-nvtx" },
 ]
 
 [[package]]
@@ -879,17 +879,34 @@ wheels = [
 
 [[package]]
 name = "my-auth"
-version = "0.3.23"
-source = { git = "https://github.com/mikolaj92/my-auth?tag=v0.3.23#94d54ab7f92fb36d1d974bd59e49c69d8d1871be" }
+version = "0.4.2"
+source = { git = "https://github.com/mikolaj92/my-auth?tag=v0.4.2#e95740af7ef8747f80f9f6d1ae57a84b28805c67" }
 dependencies = [
     { name = "typing-extensions" },
     { name = "webauthn" },
 ]
 
+[package.optional-dependencies]
+fastapi-htmx = [
+    { name = "app-factory", extra = ["platform"] },
+    { name = "fastapi" },
+    { name = "jinja2" },
+]
+
 [[package]]
 name = "my-usermanager"
-version = "0.4.5"
-source = { git = "https://github.com/mikolaj92/my-usermanager?tag=v0.4.5#7547e3382c43c77b7c87c54c541ba1d647913b04" }
+version = "0.5.4"
+source = { git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.4#37e911e6a94e1b22c7c7988417f39d05842a96fa" }
+
+[package.optional-dependencies]
+fastapi-htmx = [
+    { name = "app-factory", extra = ["platform"] },
+    { name = "fastapi" },
+    { name = "jinja2" },
+]
+myauth = [
+    { name = "my-auth" },
+]
 
 [[package]]
 name = "networkx"
@@ -1198,15 +1215,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c9/f9/066794cca041b969964f779ee5fa66a9498bbf34248ac39c5d7954e4198f/pillow-12.3.0-cp313-cp313-win32.whl", hash = "sha256:a876864214e136f0eb367788dbd7df045f4806801518e2cfe9e13229cfe06d8f", size = 6473287, upload-time = "2026-07-01T11:54:44.9Z" },
     { url = "https://files.pythonhosted.org/packages/a6/9b/7a58e61d62be561da3a356fe2384d4059a6345fc130e23ef1c36a5b81d24/pillow-12.3.0-cp313-cp313-win_amd64.whl", hash = "sha256:1cca606cd25738df4ed873d5ad46bbdb3d83b5cbca291f6b4ff13a4df6b0bbe8", size = 7239691, upload-time = "2026-07-01T11:54:47.141Z" },
     { url = "https://files.pythonhosted.org/packages/aa/b0/c4ed4f0ef8f8fa5ee8351537db6650bb8189f7e118842978dd6589065692/pillow-12.3.0-cp313-cp313-win_arm64.whl", hash = "sha256:b629de27fda84b42cde7edef0d85f13b958b47f6e9bbcbba9b673c562a89bd8b", size = 2568185, upload-time = "2026-07-01T11:54:49.137Z" },
-]
-
-[[package]]
-name = "pip"
-version = "26.2.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ae/15/4500e320e6b101ec3b719ae85b697d9940b6cda672bc555bd6016fc60c6f/pip-26.2.1.tar.gz", hash = "sha256:f6ad667e89a1fe78046c8f13232b247200f5258d7828f3f7883d660878e0813f", size = 1848877, upload-time = "2026-08-04T22:51:14.148Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl", hash = "sha256:71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e", size = 1816632, upload-time = "2026-08-04T22:51:12.472Z" },
 ]
 
 [[package]]

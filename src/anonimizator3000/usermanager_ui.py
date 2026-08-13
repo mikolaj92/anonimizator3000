@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 import secrets
+import sqlite3
+import uuid
 from collections.abc import Sequence
 from dataclasses import replace
 from typing import Final
 
 from app_factory.fastapi import AppFactoryUi
+from app_factory.platform import IDENTITY_AUTHENTICATED_SHELL
 from fastapi import FastAPI, HTTPException, Request, status
 from jinja2 import Environment
+from my_auth import SQLiteEnrollmentCapabilityStore
 from my_usermanager.adapters.fastapi_htmx import (
     CapabilityOption,
     CsrfContext,
     ExternalIdentityRow,
+    InvitationResult,
+    InvitationRow,
     PermissionGrantRow,
     UserManagerUiConfig,
     UserRow,
@@ -21,16 +27,22 @@ from my_usermanager.adapters.fastapi_htmx import (
     row_key_from_user_id,
 )
 from my_usermanager.adapters.my_auth import MY_AUTH_PROVIDER
+from my_usermanager.adapters.my_auth_enrollment import build_enrollment_capability_issuer
 from my_usermanager.adapters.my_auth_sqlite import SQLiteAuthDatabase
+from my_usermanager.adapters.sqlite_invitations import SQLiteInvitationStore
 from my_usermanager.admin import AdminUserGrantSummary, GrantAdminService, UnsafeGrantMutationError
-from my_usermanager.manager import UserManager, UserProfileUpdate
-from my_usermanager.memory import MemoryRoleStore
-from my_usermanager.models import Permission, ValidationError
+from my_usermanager.invitations import InvitationError, InvitationGrant, InvitationService
+from my_usermanager.manager import AuthorizationError, UserManager, UserProfileUpdate
+from my_usermanager.memory import MemoryAuditStore, MemoryRoleStore
+from my_usermanager.models import Permission, User, ValidationError
 from my_usermanager.permissions import ADMIN_ROLE_NAME, BUILTIN_ROLES
 from my_usermanager.sessions import read_session_principal
 from my_usermanager.subjects import AuthenticatedSubject
 
 from anonimizator3000.passkey_setup import AuthDatabaseBinding, session_csrf_token
+from anonimizator3000.platform_chrome import PLATFORM_PATHS
+
+_INVITE_TTL_SECONDS: Final = 7 * 24 * 60 * 60
 
 _SESSION_CSRF_KEY: Final = "csrf_token"
 
@@ -56,7 +68,11 @@ class SessionCsrfProtection:
 
 
 
-def summary_to_user_row(summary: AdminUserGrantSummary) -> UserRow:
+def summary_to_user_row(
+    summary: AdminUserGrantSummary,
+    *,
+    invitation: InvitationRow | None = None,
+) -> UserRow:
     """Project an admin grant summary into the adapter's row contract."""
     user = summary.user
     roles = tuple(
@@ -96,6 +112,47 @@ def summary_to_user_row(summary: AdminUserGrantSummary) -> UserRow:
                 key=lambda item: (item.provider, item.subject),
             )
         ),
+        account_status=user.status,
+        invitation=invitation,
+    )
+
+
+def _invitation_row(invitation) -> InvitationRow:
+    return InvitationRow(
+        invitation_id=invitation.invitation_id,
+        status=invitation.status,
+        expires_at=invitation.expires_at.isoformat(),
+    )
+
+
+def _invitation_connection(database: SQLiteAuthDatabase) -> sqlite3.Connection:
+    if isinstance(database.database, sqlite3.Connection):
+        return database.database
+    connection = sqlite3.connect(
+        database.database, timeout=30, check_same_thread=False
+    )
+    _ = connection.execute("PRAGMA foreign_keys=ON")
+    return connection
+
+
+def _invitation_service(
+    database: SQLiteAuthDatabase,
+    stores,
+    invitations: SQLiteInvitationStore,
+) -> InvitationService:
+    return InvitationService(
+        manager=UserManager(
+            users=stores.users,
+            roles=MemoryRoleStore(),
+            grants=stores.grants,
+        ),
+        users=stores.users,
+        identities=stores.users,
+        invitations=invitations,
+        enrollment=build_enrollment_capability_issuer(
+            SQLiteEnrollmentCapabilityStore(database.database)
+        ),
+        audit=MemoryAuditStore(),
     )
 
 
@@ -170,17 +227,31 @@ class AnonUserManagerHooks:
         self, request: Request, current_user: AuthenticatedSubject
     ) -> Sequence[UserRow]:
         del current_user
-        stores = self._auth.get(request).stores()
+        database = self._auth.get(request)
+        stores = database.stores()
+        connection = _invitation_connection(database)
         try:
+            invitations = SQLiteInvitationStore(connection)
             service = GrantAdminService(
                 users=stores.users,
                 roles=MemoryRoleStore(),
                 grants=stores.grants,
             )
             summaries = service.list_users(limit=500, offset=0)
-            return tuple(summary_to_user_row(s) for s in summaries)
+            rows = []
+            for summary in summaries:
+                pending = invitations.get_pending_for_user(summary.user.user_id)
+                rows.append(
+                    summary_to_user_row(
+                        summary,
+                        invitation=None if pending is None else _invitation_row(pending),
+                    )
+                )
+            return tuple(rows)
         finally:
             stores.close()
+            if connection is not database.database:
+                connection.close()
 
     def role_options(
         self, request: Request, current_user: AuthenticatedSubject
@@ -300,6 +371,131 @@ class AnonUserManagerHooks:
     ):
         del request, current_user
         return None
+
+    def invite_user(
+        self,
+        request: Request,
+        current_user: AuthenticatedSubject,
+        username: str,
+        email: str,
+        role: str,
+    ) -> InvitationResult:
+        database = self._auth.get(request)
+        stores = database.stores()
+        connection = _invitation_connection(database)
+        try:
+            invited = User(
+                user_id=uuid.uuid4().hex,
+                username=username,
+                email=email or None,
+                display_name=username,
+                status="pending",
+            )
+            service = _invitation_service(
+                database, stores, SQLiteInvitationStore(connection)
+            )
+            issued = service.invite(
+                actor_id=current_user.user_id,
+                user=invited,
+                grants=(InvitationGrant(role_name=role),),
+                ttl_seconds=_INVITE_TTL_SECONDS,
+            )
+            return InvitationResult(
+                activation_url=issued.activation_url(PLATFORM_PATHS.activation)
+            )
+        except InvitationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="invitation is unavailable",
+            ) from exc
+        except (AuthorizationError, ValidationError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        finally:
+            stores.close()
+            if connection is not database.database:
+                connection.close()
+
+    def reissue_invitation(
+        self,
+        request: Request,
+        current_user: AuthenticatedSubject,
+        invitation_id: str,
+    ) -> InvitationResult:
+        database = self._auth.get(request)
+        stores = database.stores()
+        connection = _invitation_connection(database)
+        try:
+            service = _invitation_service(
+                database, stores, SQLiteInvitationStore(connection)
+            )
+            issued = service.reissue(
+                actor_id=current_user.user_id,
+                invitation_id=invitation_id,
+                ttl_seconds=_INVITE_TTL_SECONDS,
+            )
+            return InvitationResult(
+                activation_url=issued.activation_url(PLATFORM_PATHS.activation)
+            )
+        except InvitationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="invitation is unavailable",
+            ) from exc
+        except (AuthorizationError, ValidationError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        finally:
+            stores.close()
+            if connection is not database.database:
+                connection.close()
+
+    def revoke_invitation(
+        self,
+        request: Request,
+        current_user: AuthenticatedSubject,
+        invitation_id: str,
+    ) -> UserRow:
+        database = self._auth.get(request)
+        stores = database.stores()
+        connection = _invitation_connection(database)
+        try:
+            invitations = SQLiteInvitationStore(connection)
+            service = _invitation_service(database, stores, invitations)
+            revoked = service.revoke(
+                actor_id=current_user.user_id,
+                invitation_id=invitation_id,
+            )
+            user = stores.users.get(revoked.user_id)
+            if user is None:
+                raise HTTPException(status_code=404, detail="user not found")
+            grants = GrantAdminService(
+                users=stores.users,
+                roles=MemoryRoleStore(),
+                grants=stores.grants,
+            )
+            return summary_to_user_row(
+                grants.summary_for_user(user),
+                invitation=_invitation_row(revoked),
+            )
+        except InvitationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="invitation is unavailable",
+            ) from exc
+        except (AuthorizationError, ValidationError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        finally:
+            stores.close()
+            if connection is not database.database:
+                connection.close()
 
     def page_context(self, request: Request) -> dict[str, object]:
         """Product shell chrome for package account/admin pages."""
@@ -479,14 +675,15 @@ def install_anon_usermanager_ui(
         hooks=hooks,
         environment=environment,
         config=UserManagerUiConfig(
-            account_path="/account",
+            account_path=PLATFORM_PATHS.account,
             profile_path="/account/profile",
-            users_path="/admin/users",
-            login_url="/login",
-            logout_path="/logout",
+            users_path=PLATFORM_PATHS.admin_users,
+            invite_path="/admin/users/invite",
+            login_url=PLATFORM_PATHS.login,
+            logout_path=PLATFORM_PATHS.logout,
             account_enabled=True,
             admin_enabled=True,
             csrf_protection=SessionCsrfProtection(),
-            base_template="base.html",
+            base_template=IDENTITY_AUTHENTICATED_SHELL,
         ),
     )
