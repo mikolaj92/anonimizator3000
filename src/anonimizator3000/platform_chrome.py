@@ -16,18 +16,25 @@ from app_factory.platform import (
     build_platform_context,
 )
 from jinja2 import Environment
+from my_auth.fastapi import PasskeyPaths
 
 APP_NAME: Final = "Dokumenty"
 DEFAULT_LOCALE: Final = "pl"
 LOCALE_COOKIE_NAME: Final = "anon_lang"
 SUPPORTED_LOCALES: Final[tuple[str, ...]] = ("pl", "en", "de")
 
-_PATHS: Final = PlatformPaths(
-    login="/login",
-    logout="/logout",
-    register="/register",
+PASSKEY_PATHS: Final = PasskeyPaths()
+PLATFORM_PATHS: Final = PlatformPaths(
+    login=PASSKEY_PATHS.login_page,
+    logout=PASSKEY_PATHS.logout,
+    register=PASSKEY_PATHS.register_page,
+    activation=PASSKEY_PATHS.activation_page,
+    recovery=PASSKEY_PATHS.recovery_page,
     account="/account",
+    credentials=PASSKEY_PATHS.credentials_page,
     admin_users="/admin/users",
+    # Packaged invite form lives on the users page; POST remains /admin/users/invite.
+    invite="/admin/users",
 )
 
 _LOCALE_LABELS: Final = (("pl", "PL"), ("en", "EN"), ("de", "DE"))
@@ -37,22 +44,16 @@ _LOCALES: Final = tuple(
 
 
 def build_menu(*, is_admin: bool = False) -> tuple[MenuGroup, ...]:
-    """Sidebar navigation for the anonymization portal."""
-    product = MenuGroup(
-        label="Produkt",
-        items=(
-            MenuItem(label="Anonimizacja", href="/", icon="file"),
+    """Sidebar product navigation; identity slots come from PlatformConfig flags."""
+    del is_admin
+    return (
+        MenuGroup(
+            label="Produkt",
+            items=(
+                MenuItem(label="Anonimizacja", href="/", icon="file"),
+            ),
         ),
     )
-    if not is_admin:
-        return (product,)
-    admin = MenuGroup(
-        label="Administracja",
-        items=(
-            MenuItem(label="Użytkownicy", href=_PATHS.admin_users, icon="users"),
-        ),
-    )
-    return (product, admin)
 
 
 def platform_config(
@@ -68,8 +69,11 @@ def platform_config(
         brand_htmx=False,
         navigation_label="Nawigacja",
         menu=build_menu(is_admin=is_admin),
-        paths=_PATHS,
+        paths=PLATFORM_PATHS,
+        enable_account=True,
+        enable_credentials=True,
         enable_admin_users=True,
+        enable_invite=True,
         show_register=show_register,
         locales=_LOCALES,
         default_locale=DEFAULT_LOCALE,
@@ -130,8 +134,11 @@ def login_platform_config() -> PlatformConfig:
         app_name=APP_NAME,
         brand_href="/",
         brand_htmx=False,
-        paths=_PATHS,
+        paths=PLATFORM_PATHS,
+        enable_account=False,
+        enable_credentials=False,
         enable_admin_users=False,
+        enable_invite=False,
         show_register=True,
         locales=(
             PlatformLocale(code="pl", label="PL", href="/login?lang=pl"),

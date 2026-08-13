@@ -24,6 +24,7 @@ import anonimizator3000.main as main_module
 from anonimizator3000.config import Settings
 from anonimizator3000.main import _attachment_header, _settings_boot, app
 from anonimizator3000.passkey_setup import _complete_registration, build_passkey_components
+from anonimizator3000.platform_chrome import PLATFORM_PATHS, platform_config
 from anonimizator3000.upload import UploadError, read_multipart_document
 
 
@@ -296,21 +297,42 @@ class _FakeUploadRequest:
         yield b""
 
 
+def test_identity_lifecycle_paths_and_flags_match_bom() -> None:
+    """Host chrome exposes the v0.6.5 identity-lifecycle path/flag matrix."""
+    assert PLATFORM_PATHS.activation == "/activate"
+    assert PLATFORM_PATHS.recovery == "/recover"
+    assert PLATFORM_PATHS.credentials == "/account/passkeys"
+    assert PLATFORM_PATHS.invite == "/admin/users"
+    config = platform_config(user={"id": "admin", "is_admin": True})
+    assert config.enable_account is True
+    assert config.enable_credentials is True
+    assert config.enable_admin_users is True
+    assert config.enable_invite is True
+
+
 def test_platform_auth_routes_exist() -> None:
     """Package-owned auth/account/admin surfaces are reachable anonymously."""
     with TestClient(app) as client:
         login = client.get("/login")
         register = client.get("/register")
+        activate = client.get("/activate")
+        recover = client.get("/recover")
         account = client.get("/account", follow_redirects=False)
+        credentials = client.get("/account/passkeys", follow_redirects=False)
         profile = client.post("/account/profile", follow_redirects=False)
         admin_users = client.get("/admin/users", follow_redirects=False)
+        invite = client.post("/admin/users/invite", follow_redirects=False)
         logout = client.post("/logout", follow_redirects=False)
 
     assert login.status_code == 200
     assert register.status_code == 200
+    assert activate.status_code == 200
+    assert recover.status_code == 200
     assert account.status_code == 303
+    assert credentials.status_code in {303, 401}
     assert profile.status_code == 401
     assert admin_users.status_code == 303
+    assert invite.status_code in {303, 401, 403}
     assert logout.status_code == 303
 
 
