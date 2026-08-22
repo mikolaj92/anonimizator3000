@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import secrets
 import sqlite3
 import uuid
 from collections.abc import Sequence
@@ -21,6 +20,7 @@ from my_usermanager.adapters.fastapi_htmx import (
     InvitationResult,
     InvitationRow,
     PermissionGrantRow,
+    SessionCsrfProtection,
     UserManagerUiConfig,
     UserRow,
     install_usermanager_ui,
@@ -39,33 +39,12 @@ from my_usermanager.permissions import ADMIN_ROLE_NAME, BUILTIN_ROLES
 from my_usermanager.sessions import read_session_principal
 from my_usermanager.subjects import AuthenticatedSubject
 
-from anonimizator3000.passkey_setup import AuthDatabaseBinding, session_csrf_token
+from anonimizator3000.passkey_setup import AuthDatabaseBinding
 from anonimizator3000.platform_chrome import PLATFORM_PATHS
 
 _INVITE_TTL_SECONDS: Final = 7 * 24 * 60 * 60
 
 _SESSION_CSRF_KEY: Final = "csrf_token"
-
-
-class SessionCsrfProtection:
-    """Double-submit CSRF token stored in the signed session cookie."""
-
-    def token(self, request: Request) -> str:
-        token = session_csrf_token(request)
-        if token is None:
-            raise RuntimeError("session middleware is required for CSRF")
-        return token
-
-    def validate(self, request: Request, submitted_token: str) -> None:
-        expected = request.session.get(_SESSION_CSRF_KEY)
-        if (
-            not isinstance(expected, str)
-            or not expected
-            or not isinstance(submitted_token, str)
-            or not secrets.compare_digest(expected, submitted_token)
-        ):
-            raise PermissionError("invalid csrf token")
-
 
 
 def summary_to_user_row(
@@ -350,7 +329,7 @@ class AnonUserManagerHooks:
         )
 
     def csrf_context(self, request: Request) -> CsrfContext:
-        token = SessionCsrfProtection().token(request)
+        token = SessionCsrfProtection(session_key=_SESSION_CSRF_KEY).token(request)
         return CsrfContext(
             hidden_inputs=(("csrf", token),),
             headers={"X-CSRF-Token": token},
@@ -683,7 +662,7 @@ def install_anon_usermanager_ui(
             logout_path=PLATFORM_PATHS.logout,
             account_enabled=True,
             admin_enabled=True,
-            csrf_protection=SessionCsrfProtection(),
+            csrf_protection=SessionCsrfProtection(session_key=_SESSION_CSRF_KEY),
             base_template=IDENTITY_AUTHENTICATED_SHELL,
         ),
     )
