@@ -18,7 +18,7 @@ Logika jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 - `github.com/mikolaj92/Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
 - `src/anonimizator3000` - UI, upload, limity per IP, lokalny worker i integracja trzech pakietów.
 
-`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: `app-factory` `v0.6.11`, `my-auth` `v0.4.6`, `my-usermanager` `v0.5.7`, `posejdon` `v0.1.0`, a `fala-runtime` i `doctotext` po `rev`. `uv.lock` przypina konkretne commity.
+`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: `app-factory` `v0.6.11`, `my-auth` `v0.4.6`, `my-usermanager` `v0.5.8`, `posejdon` `v0.1.0`, a `fala-runtime` i `doctotext` po `rev`. `uv.lock` przypina konkretne commity.
 
 ### Przepływy AI / analizy (issue #23)
 
@@ -59,6 +59,15 @@ surface.
 - DocToText
 - Posejdon
 - Fala
+
+
+### Migracja bazy tożsamości
+
+Przed zmianą schematu istniejący `auth.sqlite3` dostaje spójną kopię obok pliku:
+`auth.sqlite3.pre-migration-<UTC>.sqlite3`. Migracja my-auth i my-usermanager jest
+jedną transakcją i nie uruchamia dual-read. Nieznany układ nadal zatrzymuje start.
+Rollback: zatrzymaj usługę, zachowaj uszkodzony plik jako dowód i przywróć nazwę
+kopii sprzed migracji.
 
 ## Uruchomienie
 

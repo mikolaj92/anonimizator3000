@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
@@ -14,6 +15,7 @@ from anonimizator3000.config import Settings, settings_from_env
 
 _PACKAGE_DIR: Final[Path] = Path(__file__).resolve().parent
 _DEFAULT_AUTH_DB: Final[Path] = _PACKAGE_DIR.parents[1] / "storage" / "auth.sqlite3"
+_BACKUP_SUFFIX: Final = ".pre-migration-"
 
 
 def auth_db_path(settings: Settings | None = None) -> Path:
@@ -42,7 +44,35 @@ def inspect_auth_schema(database: str | Path | sqlite3.Connection) -> tuple[obje
 
 
 def migrate_auth_database(settings: Settings | None = None) -> SQLiteAuthDatabase:
-    """Initialize or migrate shared auth schemas and return the coordinator."""
-    database = get_auth_database(settings)
+    """Initialize or migrate auth schemas, backing up an existing DB first."""
+    path = auth_db_path(settings)
+    if path.exists() and path.stat().st_size > 0:
+        auth_state, um_state = inspect_auth_schema(path)
+        if (
+            getattr(auth_state, "state", "unsupported") != "current"
+            or um_state != "current"
+        ):
+            _backup_database(path)
+    database = SQLiteAuthDatabase(path)
     database.initialize()
     return database
+
+
+def _backup_database(path: Path) -> Path:
+    """Create a consistent SQLite backup beside the database before migration."""
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    backup = path.with_name(f"{path.name}{_BACKUP_SUFFIX}{stamp}.sqlite3")
+    sequence = 1
+    while backup.exists():
+        backup = path.with_name(
+            f"{path.name}{_BACKUP_SUFFIX}{stamp}-{sequence}.sqlite3"
+        )
+        sequence += 1
+    source = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    target = sqlite3.connect(backup)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
+    return backup
