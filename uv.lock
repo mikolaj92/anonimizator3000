@@ -1,9 +1,9 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12, <3.14"
 
 [manifest]
-overrides = [{ name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.5" }]
+overrides = [{ name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.11" }]
 
 [[package]]
 name = "annotated-doc"
@@ -74,7 +74,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.5" },
+    { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.11" },
     { name = "doctotext", git = "https://github.com/mikolaj92/DocToText.git?rev=33aaf6071f45cae8f33ad97fe4b40ffd0f1fd18a" },
     { name = "en-core-web-lg", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" },
     { name = "fala-runtime", git = "https://github.com/mikolaj92/Fala.git?rev=6dd634d18b4812faed04897426bc69322ef59c34" },
@@ -82,8 +82,8 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "my-auth", extras = ["fastapi-htmx"], git = "https://github.com/mikolaj92/my-auth?tag=v0.4.2" },
-    { name = "my-usermanager", extras = ["fastapi-htmx", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.4" },
+    { name = "my-auth", extras = ["fastapi-htmx"], git = "https://github.com/mikolaj92/my-auth?tag=v0.4.6" },
+    { name = "my-usermanager", extras = ["fastapi-htmx", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.7" },
     { name = "pdf2docx", specifier = ">=0.5.8" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=25.0" },
     { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
@@ -128,8 +128,8 @@ wheels = [
 
 [[package]]
 name = "app-factory"
-version = "0.6.5"
-source = { git = "https://github.com/mikolaj92/app-factory?tag=v0.6.5#18edb324de8737537b085592ed9a76bb8484cc0a" }
+version = "0.6.11"
+source = { git = "https://github.com/mikolaj92/app-factory?tag=v0.6.11#c5c0d2cfce8f6a390a05dbf721f9a7e9e7cdf7fb" }
 dependencies = [
     { name = "jinja2" },
 ]
@@ -899,8 +899,8 @@ wheels = [
 
 [[package]]
 name = "my-auth"
-version = "0.4.2"
-source = { git = "https://github.com/mikolaj92/my-auth?tag=v0.4.2#e95740af7ef8747f80f9f6d1ae57a84b28805c67" }
+version = "0.4.6"
+source = { git = "https://github.com/mikolaj92/my-auth?tag=v0.4.6#7bf180ef5510640b8fe3b86c59607e2b9ca1c1a4" }
 dependencies = [
     { name = "typing-extensions" },
     { name = "webauthn" },
@@ -915,8 +915,8 @@ fastapi-htmx = [
 
 [[package]]
 name = "my-usermanager"
-version = "0.5.4"
-source = { git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.4#37e911e6a94e1b22c7c7988417f39d05842a96fa" }
+version = "0.5.7"
+source = { git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.7#8ac109a7de7f4b2e2091233d98f1e5935ed70014" }
 
 [package.optional-dependencies]
 fastapi-htmx = [

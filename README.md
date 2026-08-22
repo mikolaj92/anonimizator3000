@@ -18,7 +18,7 @@ Logika jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 - `github.com/mikolaj92/Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
 - `src/anonimizator3000` - UI, upload, limity per IP, lokalny worker i integracja trzech pakietów.
 
-`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: `app-factory` `v0.6.5`, `my-auth` `v0.4.2`, `posejdon` `v0.1.0`, a `fala-runtime` i `doctotext` po `rev`. `uv.lock` przypina konkretne commity.
+`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: `app-factory` `v0.6.11`, `my-auth` `v0.4.6`, `my-usermanager` `v0.5.7`, `posejdon` `v0.1.0`, a `fala-runtime` i `doctotext` po `rev`. `uv.lock` przypina konkretne commity.
 
 ### Przepływy AI / analizy (issue #23)
 
