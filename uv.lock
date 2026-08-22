@@ -83,7 +83,7 @@ requires-dist = [
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "my-auth", extras = ["fastapi-htmx"], git = "https://github.com/mikolaj92/my-auth?tag=v0.4.6" },
-    { name = "my-usermanager", extras = ["fastapi-htmx", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.7" },
+    { name = "my-usermanager", extras = ["fastapi-htmx", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.8" },
     { name = "pdf2docx", specifier = ">=0.5.8" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=25.0" },
     { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
@@ -915,8 +915,8 @@ fastapi-htmx = [
 
 [[package]]
 name = "my-usermanager"
-version = "0.5.7"
-source = { git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.7#8ac109a7de7f4b2e2091233d98f1e5935ed70014" }
+version = "0.5.8"
+source = { git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.8#c7c75ab17034b7acab2ba5487385aec67581aa1c" }
 
 [package.optional-dependencies]
 fastapi-htmx = [

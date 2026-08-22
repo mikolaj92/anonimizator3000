@@ -55,10 +55,10 @@ detectors = [
 
 [tool.uv.sources]
 # Platform BOM from app-factory v0.6.11 COMPAT.md:
-# app-factory v0.6.11 + my-auth v0.4.6 + my-usermanager v0.5.7
+# app-factory v0.6.11 + my-auth v0.4.6 + my-usermanager v0.5.8
 app-factory = { git = "https://github.com/mikolaj92/app-factory", tag = "v0.6.11" }
 my-auth = { git = "https://github.com/mikolaj92/my-auth", tag = "v0.4.6" }
-my-usermanager = { git = "https://github.com/mikolaj92/my-usermanager", tag = "v0.5.7" }
+my-usermanager = { git = "https://github.com/mikolaj92/my-usermanager", tag = "v0.5.8" }
 # `fala-runtime` is the legacy CPython carrier runtime used by this product
 # (`fala.models`, `fala.carrier_runtime`, `fala.runtime_backend`). Do not replace
 # it with Fala v0.7.x: that release only provides the incompatible host/sdk
@@ -70,9 +70,9 @@ en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/dow
 
 [tool.uv]
 # Nested adapter uv.sources pin older app-factory tags
-# (UM v0.5.7 sources app-factory@v0.6.11; my-auth v0.4.6 sources
+# (UM v0.5.8 sources app-factory@v0.6.11; my-auth v0.4.6 sources
 # app-factory@v0.6.11). Override app-factory only. Do not override
-# my-auth — UM v0.5.7 already nests my-auth@v0.4.6.
+# my-auth — UM v0.5.8 already nests my-auth@v0.4.6.
 override-dependencies = [
   "app-factory[platform]",
 ]
