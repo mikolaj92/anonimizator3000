@@ -54,8 +54,9 @@ detectors = [
 ]
 
 [tool.uv.sources]
-# Platform BOM from app-factory v0.6.11 COMPAT.md:
-# app-factory v0.6.11 + my-auth v0.4.6 + my-usermanager v0.5.8
+# Tagged pins (they resolve). Not a COMPAT.md row — app-factory@v0.6.11
+# COMPAT.md has no v0.6.11 line; latest there is v0.6.10 + my-auth v0.4.5
+# + my-usermanager v0.5.6.
 app-factory = { git = "https://github.com/mikolaj92/app-factory", tag = "v0.6.11" }
 my-auth = { git = "https://github.com/mikolaj92/my-auth", tag = "v0.4.6" }
 my-usermanager = { git = "https://github.com/mikolaj92/my-usermanager", tag = "v0.5.8" }

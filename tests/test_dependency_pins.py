@@ -34,3 +34,14 @@ def test_readme_documents_tag_and_rev_pins_instead_of_main() -> None:
     assert "fala-runtime" in readme
     assert "doctotext" in readme
     assert "rev" in readme
+
+
+def test_docs_do_not_claim_missing_compat_v0611_row() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert "Platform BOM from app-factory v0.6.11 COMPAT.md" not in pyproject
+    assert "to nie jest wiersz COMPAT.md" in readme
+    assert "v0.6.10" in readme and "v0.4.5" in readme and "v0.5.6" in readme
+    assert "COMPAT.md has no v0.6.11 line" in pyproject
+    assert "v0.6.10 + my-auth v0.4.5" in pyproject
