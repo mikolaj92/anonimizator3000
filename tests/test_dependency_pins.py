@@ -16,7 +16,7 @@ def test_pyproject_pins_git_sources_by_tag_or_rev_not_main() -> None:
 
     assert sources["app-factory"]["tag"] == "v0.6.16"
     assert sources["my-auth"]["tag"] == "v0.4.8"
-    assert sources["posejdon"]["tag"] == "v0.1.0"
+    assert sources["posejdon"]["tag"] == "v0.1.5"
     assert sources["fala-runtime"]["rev"] == "6dd634d18b4812faed04897426bc69322ef59c34"
     assert sources["docxtor"]["tag"] == "v0.4.3"
     assert "rev" not in sources["docxtor"]
@@ -34,7 +34,7 @@ def test_readme_documents_tag_and_rev_pins_instead_of_main() -> None:
     assert "branch=main" not in readme
     assert "app-factory" in readme and "v0.6.16" in readme
     assert "my-auth" in readme and "v0.4.8" in readme
-    assert "posejdon" in readme and "v0.1.0" in readme
+    assert "posejdon" in readme and "v0.1.5" in readme
     assert "fala-runtime" in readme
     assert "Docxtor" in readme and "v0.4.3" in readme
     assert "rev" in readme
