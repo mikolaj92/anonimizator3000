@@ -13,12 +13,12 @@ dokumentów, silnika anonimizacji ani runtime'u workflow.
 
 Logika jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 
-- `github.com/mikolaj92/DocToText` - odczyt tekstu z dokumentów i zapis podmienionego tekstu z powrotem do dokumentu.
+- `github.com/mikolaj92/Docxtor` - odczyt tekstu z dokumentów i zapis podmienionego tekstu z powrotem do dokumentu.
 - `github.com/mikolaj92/Posejdon` - anonimizacja tekstu przez Presidio, regex/walidację PL i opcjonalny GLiNER.
 - `github.com/mikolaj92/Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
 - `src/anonimizator3000` - UI, upload, limity per IP, lokalny worker i integracja trzech pakietów.
 
-`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: `app-factory` `v0.6.11`, `my-auth` `v0.4.6`, `my-usermanager` `v0.5.8` (tagi się resolvują; to nie jest wiersz COMPAT.md — na `app-factory@v0.6.11` najnowszy wiersz to `v0.6.10` / `v0.4.5` / `v0.5.6`), `posejdon` `v0.1.0`, a `fala-runtime` i `doctotext` po `rev`. `uv.lock` przypina konkretne commity.
+`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: `app-factory` `v0.6.11`, `my-auth` `v0.4.6`, `my-usermanager` `v0.5.8` (tagi się resolvują; to nie jest wiersz COMPAT.md — na `app-factory@v0.6.11` najnowszy wiersz to `v0.6.10` / `v0.4.5` / `v0.5.6`), `Docxtor` `v0.4.3`, `posejdon` `v0.1.0`, a `fala-runtime` po `rev`. `uv.lock` przypina konkretne commity.
 
 ### Przepływy AI / analizy (issue #23)
 
@@ -29,10 +29,10 @@ uruchamia graf `DOCUMENT_FLOW`. Każdy węzeł jest osobnym adapterem
 
 | Krok | Wejście ze współdzielonego `JobContext` | Wyjście do kontekstu | Małe wyjście rejestrowane przez Fala |
 | --- | --- | --- | --- |
-| `convert` | nazwa, MIME, bajty źródłowe | nazwa i bajty DOCX | typ źródła, czy wykonano konwersję |
-| `load` | nazwa i bajty DOCX, limit znaków | sparsowany dokument | liczba segmentów i znaków |
+| `convert` | nazwa i MIME | — | zwalidowany typ źródła |
+| `load` | nazwa, MIME, bajty źródłowe, limit znaków | sparsowany dokument Docxtor | liczba segmentów i znaków |
 | `anonymize` | tekst dokumentu, styl, `SegmentAnonymizer` | zanonimizowane segmenty i findings | liczby findings według kategorii |
-| `serialize` | dokument i zanonimizowane segmenty | nazwa, MIME i bajty wyniku | metadane pliku i rozmiar |
+| `serialize` | dokument i zanonimizowane segmenty | nazwa, MIME i bajty wyniku w formacie wejściowym | metadane pliku i rozmiar |
 | `redact_authors` | bajty wyniku | bajty bez tożsamości autorów | liczba zanonimizowanych autorów |
 
 Ciężkie lub wrażliwe dane pozostają tylko w pamięci procesu i są usuwane po
@@ -56,7 +56,7 @@ surface.
 - FastAPI
 - HTMX
 - Basecoat UI
-- DocToText
+- Docxtor
 - Posejdon
 - Fala
 
@@ -92,8 +92,8 @@ uv run uvicorn anonimizator3000.main:app --host 0.0.0.0 --port 8000 --reload
 ## Obsługiwane wejście
 
 - tekstowe: `.txt`, `.md`, `.csv`, `.json`, `.xml`, `.html`, `.log`
-- `.pdf` przez `DocToText`
-- `.docx` przez `DocToText`
+- `.pdf` przez `Docxtor`
+- `.docx` przez `Docxtor`
 
 Wynik zachowuje typ wejścia:
 
@@ -101,7 +101,7 @@ Wynik zachowuje typ wejścia:
 - DOCX -> DOCX
 - tekst -> TXT
 
-PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych stronach, więc liczba stron i grafika dokumentu zostają zachowane, gdy zmienione fragmenty da się dopasować do tekstu strony. Jeśli fragmentu nie da się bezpiecznie odnaleźć, `DocToText` zamyka ryzyko wycieku przez zastąpienie tekstu tej strony. DOCX jest modyfikowany w pamięci przez `DocToText`; struktura akapitów i tabel zostaje, ale formatowanie w ramach jednego akapitu może się uprościć.
+PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych stronach, więc liczba stron i grafika dokumentu zostają zachowane, gdy zmienione fragmenty da się dopasować do tekstu strony. Jeśli fragmentu nie da się bezpiecznie odnaleźć, `Docxtor` zamyka ryzyko wycieku przez zastąpienie tekstu tej strony. DOCX jest modyfikowany w pamięci przez `Docxtor`; struktura akapitów i tabel zostaje, ale formatowanie w ramach jednego akapitu może się uprościć.
 
 ## Detekcja
 
@@ -158,7 +158,7 @@ Operator może jawnie wyłączyć GLiNER przez `ANON_GLINER_ENABLED=false`.
 | `AuthDatabaseBinding` i proxy store'ów | **Promowane.** To jawna granica lifecycle'u: routery są instalowane raz, a lifespan przełącza je na ponownie otwartą bazę SQLite; pokrywają ją testy tras auth. |
 | `_complete_registration`: obsługa `DuplicateUserError` / `DuplicateGrantError` | **Promowane.** To idempotencja powtórzonej ceremonii WebAuthn i równoległego nadania roli pierwszemu użytkownikowi, nie zgodność wsteczna. |
 | `Fala` CPython carrier API | **Pozostaje jawną funkcją produktu.** Migracja jednorazowa do nowego host/sdk wymaga osobnego projektu; granica i przypięta rewizja są opisane wyżej. |
-| Konwersja PDF bez bezpiecznego dopasowania redakcji | **Promowana.** Fail-closed zastępuje tekst strony, aby nie ujawnić PII; zachowanie należy do `DocToText` i jest opisane w „Obsługiwane wejście”. |
+| Konwersja PDF bez bezpiecznego dopasowania redakcji | **Promowana.** Fail-closed zastępuje tekst strony, aby nie ujawnić PII; zachowanie należy do `Docxtor` i jest opisane w „Obsługiwane wejście”. |
 
 ## Auth (passkeys + usermanager)
 

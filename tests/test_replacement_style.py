@@ -2,8 +2,8 @@ import time
 from io import BytesIO
 
 import pytest
-from doctotext import DOCX_MIME, load_document
 from docx import Document
+from docxtor import DOCX_MIME, load_document
 from fastapi.testclient import TestClient
 from posejdon import TextAnonymizer
 

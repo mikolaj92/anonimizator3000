@@ -10,18 +10,16 @@ memory. Only observable metadata (segment counts, findings) flows through Fala.
 
 from __future__ import annotations
 
-import contextlib
-import logging
 import re
-import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
+from html import escape
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Protocol, TypedDict
 from zipfile import ZipFile
 
-from doctotext import DOCX_MIME, PDF_MIME, DocumentError, document_to_bytes, load_document
+from docxtor import DOCX_MIME, PDF_MIME, DocumentError, document_to_bytes, load_document
 from fala.adapters import StepRunRequest
 from posejdon import ReplacementKind
 
@@ -89,8 +87,6 @@ class JobContext:
     anonymizer: SegmentAnonymizer
     max_text_chars: int
     replacement_style: str = DEFAULT_REPLACEMENT_STYLE
-    docx_filename: str | None = None
-    docx_bytes: bytes | None = None
     document: Any | None = None
     anonymized_texts: list[str] | None = None
     result_filename: str | None = None
@@ -118,23 +114,18 @@ def discard_job(run_id: str) -> None:
 
 
 def convert(request: StepRunRequest) -> ConvertOutput:
-    """Read source fields and produce DOCX fields plus source-kind metadata."""
+    """Validate source metadata; Docxtor owns format-specific processing."""
     context = job_context(request.run_id)
     name = Path(context.filename or "dokument").name
     kind = _document_kind(name, context.content_type)
-    if kind == "docx":
-        context.docx_filename = name or f"dokument{_DOCX_SUFFIX}"
-        context.docx_bytes = context.source_bytes
-        return {"source_kind": "docx", "converted": False}
-    context.docx_filename = f"{Path(name).stem or 'dokument'}{_DOCX_SUFFIX}"
-    context.docx_bytes = _pdf_to_docx(context.source_bytes, request.work_dir)
-    return {"source_kind": "pdf", "converted": True}
+    return {"source_kind": kind, "converted": False}
 
 
 def load(request: StepRunRequest) -> LoadOutput:
-    """Read DOCX fields, store a parsed document, and return text-size metadata."""
+    """Load the source through Docxtor and return text-size metadata."""
     context = job_context(request.run_id)
-    document = load_document(context.docx_filename, DOCX_MIME, context.docx_bytes)
+    name = Path(context.filename or "dokument").name
+    document = load_document(name, context.content_type, context.source_bytes)
     total_chars = sum(len(text) for text in document.texts)
     if total_chars == 0:
         raise DocumentError("Nie znaleziono tekstu do anonimizacji.")
@@ -161,11 +152,16 @@ def anonymize(request: StepRunRequest) -> AnonymizeOutput:
 def serialize(request: StepRunRequest) -> SerializeOutput:
     """Read anonymized text, store result bytes, and return file metadata."""
     context = job_context(request.run_id)
+    source_texts = list(context.document.texts)
     context.document.apply_texts(context.anonymized_texts)
-    result = document_to_bytes(context.document, context.docx_filename)
+    result = document_to_bytes(context.document, context.filename)
     context.result_filename = result.filename
     context.result_content_type = result.content_type
     context.result_bytes = result.data
+    if result.content_type == DOCX_MIME:
+        context.result_bytes = _remove_stale_docx_text(
+            result.data, zip(source_texts, context.anonymized_texts, strict=True)
+        )
     return {
         "filename": result.filename,
         "content_type": result.content_type,
@@ -176,8 +172,46 @@ def serialize(request: StepRunRequest) -> SerializeOutput:
 def redact_authors(request: StepRunRequest) -> RedactAuthorsOutput:
     """Read result bytes, redact author metadata, and return the identity count."""
     context = job_context(request.run_id)
+    if context.result_content_type != DOCX_MIME:
+        return {"authors_redacted": 0}
     context.result_bytes, redacted = _redact_author_metadata(context.result_bytes)
     return {"authors_redacted": redacted}
+
+
+def _remove_stale_docx_text(
+    docx_bytes: bytes, replacements: Any
+) -> bytes:
+    """Remove source text left behind in hyperlink XML by Docxtor's DOCX writer."""
+    changed = [
+        (escape(source, quote=False).encode(), escape(target, quote=False).encode())
+        for source, target in replacements
+        if source != target
+    ]
+    if not changed:
+        return docx_bytes
+
+    with ZipFile(BytesIO(docx_bytes)) as archive:
+        infos = archive.infolist()
+        parts = {info.filename: archive.read(info.filename) for info in infos}
+
+    updated_parts: dict[str, bytes] = {}
+    for name, data in parts.items():
+        if not _WORD_XML_RE.match(name):
+            continue
+        updated = data
+        for source, target in changed:
+            if source in updated and target in updated:
+                updated = updated.replace(source, b"")
+        if updated != data:
+            updated_parts[name] = updated
+
+    if not updated_parts:
+        return docx_bytes
+    output = BytesIO()
+    with ZipFile(output, "w") as archive:
+        for info in infos:
+            archive.writestr(info, updated_parts.get(info.filename, parts[info.filename]))
+    return output.getvalue()
 
 
 def _redact_author_metadata(docx_bytes: bytes) -> tuple[bytes, int]:
@@ -230,18 +264,6 @@ def _redact_author_metadata(docx_bytes: bytes) -> tuple[bytes, int]:
     return output.getvalue(), len(aliases)
 
 
-@contextlib.contextmanager
-def _quiet_root_logging():
-    """Silence pdf2docx's page-by-page INFO banner (it logs on the root logger)."""
-    root = logging.getLogger()
-    previous = root.level
-    root.setLevel(logging.WARNING)
-    try:
-        yield
-    finally:
-        root.setLevel(previous)
-
-
 def _document_kind(name: str, content_type: str) -> str:
     suffix = Path(name).suffix.lower()
     if content_type == DOCX_MIME or suffix == _DOCX_SUFFIX:
@@ -249,22 +271,3 @@ def _document_kind(name: str, content_type: str) -> str:
     if content_type == PDF_MIME or suffix == _PDF_SUFFIX:
         return "pdf"
     raise DocumentError("Obsługujemy tylko pliki DOCX i PDF.")
-
-
-def _pdf_to_docx(pdf_bytes: bytes, work_dir: Any | None) -> bytes:
-    from pdf2docx import Converter
-
-    root = Path(work_dir) if work_dir is not None else Path(tempfile.mkdtemp(prefix="anon-pdf-"))
-    docx_path = root / "converted.docx"
-    converter = Converter(stream=pdf_bytes)
-    try:
-        with _quiet_root_logging():
-            converter.convert(str(docx_path))
-    finally:
-        converter.close()
-    data = docx_path.read_bytes()
-    if work_dir is None:
-        with contextlib.suppress(OSError):
-            docx_path.unlink()
-            root.rmdir()
-    return data
