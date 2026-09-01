@@ -298,7 +298,7 @@ class _FakeUploadRequest:
 
 
 def test_identity_lifecycle_paths_and_flags_match_bom() -> None:
-    """Host chrome exposes the v0.6.11 identity-lifecycle path/flag matrix."""
+    """Host chrome exposes the v0.6.16 identity-lifecycle path/flag matrix."""
     assert PLATFORM_PATHS.activation == "/activate"
     assert PLATFORM_PATHS.recovery == "/recover"
     assert PLATFORM_PATHS.credentials == "/account/passkeys"
