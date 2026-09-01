@@ -10,7 +10,7 @@ authors = [
 ]
 dependencies = [
     "app-factory[platform]",
-    "doctotext",
+    "docxtor",
     "en-core-web-lg",
     "fala-runtime",
     "fastapi>=0.115.0",
@@ -18,7 +18,6 @@ dependencies = [
     "jinja2>=3.1.0",
     "my-auth[fastapi-htmx]",
     "my-usermanager[fastapi-htmx,myauth]",
-    "pdf2docx>=0.5.8",
     "posejdon",
     "presidio-analyzer>=2.2.0",
     "pydantic>=2.10.0",
@@ -64,7 +63,7 @@ my-usermanager = { git = "https://github.com/mikolaj92/my-usermanager", tag = "v
 # (`fala.models`, `fala.carrier_runtime`, `fala.runtime_backend`). Do not replace
 # it with Fala v0.7.x: that release only provides the incompatible host/sdk
 # binding and intentionally removed `RuntimeBackendService`.
-doctotext = { git = "https://github.com/mikolaj92/DocToText.git", rev = "33aaf6071f45cae8f33ad97fe4b40ffd0f1fd18a" }
+docxtor = { git = "https://github.com/mikolaj92/Docxtor.git", tag = "v0.4.3" }
 fala-runtime = { git = "https://github.com/mikolaj92/Fala.git", rev = "6dd634d18b4812faed04897426bc69322ef59c34" }
 posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", tag = "v0.1.0" }
 en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }

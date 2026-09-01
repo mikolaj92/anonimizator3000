@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from doctotext import DocumentError
+from docxtor import DocumentError
 from fala.carrier_runtime import FalaRuntime
 from fala.runtime_backend import CarrierProcessStatus, Run
 

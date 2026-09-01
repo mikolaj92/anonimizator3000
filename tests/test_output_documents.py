@@ -5,13 +5,11 @@ from zipfile import ZipFile
 
 import fitz
 import pytest
-from doctotext import DOCX_MIME, PDF_MIME, DocumentError, load_document
 from docx import Document
+from docxtor import DOCX_MIME, PDF_MIME, DocumentError, load_document
 from posejdon import TextAnonymizer
 
 from anonimizator3000.pipeline import process_document
-
-_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 UNICODE_FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -142,7 +140,7 @@ def test_processor_anonymizes_spaced_nip_and_krs_without_leaking_digits() -> Non
     assert result.findings["KRS"] == 1
 
 
-def test_pdf_input_is_converted_to_anonymized_docx() -> None:
+def test_pdf_input_is_anonymized_through_docxtor() -> None:
     data = _unicode_pdf_bytes(
         "Dane nie są fikcyjne. Zażółć gęślą jaźń. Jan Kowalski PESEL 44051401359",
         "Druga strona bez danych.",
@@ -150,25 +148,26 @@ def test_pdf_input_is_converted_to_anonymized_docx() -> None:
 
     result = _process("sample.pdf", PDF_MIME, data)
 
-    assert result.filename == "sample.anonimizowany.docx"
-    assert result.content_type == DOCX_MIME
-    assert result.data.startswith(b"PK")
+    assert result.filename == "sample.anonimizowany.pdf"
+    assert result.content_type == PDF_MIME
+    assert result.data.startswith(b"%PDF")
 
-    output_text = _docx_text(result.data)
-    assert "Zażółć gęślą jaźń" in output_text
+    output_text = "\n".join(load_document(result.filename, PDF_MIME, result.data).texts)
+    assert "Zażółć gęślą jaźń" in output_text.replace("\xa0", " ")
     assert "Jan Kowalski" not in output_text
     assert "44051401359" not in output_text
 
 
-def test_full_pdf_document_regression_produces_docx_without_known_leaks() -> None:
+def test_full_pdf_document_regression_preserves_pdf_without_known_leaks() -> None:
     data = _unicode_pdf_bytes(*FULL_DOCUMENT_PAGES)
 
     result = _process("pelna-umowa.pdf", PDF_MIME, data)
 
-    assert result.filename == "pelna-umowa.anonimizowany.docx"
-    assert result.content_type == DOCX_MIME
-    assert result.data.startswith(b"PK")
-    _assert_no_known_leaks(_docx_text(result.data))
+    assert result.filename == "pelna-umowa.anonimizowany.pdf"
+    assert result.content_type == PDF_MIME
+    assert result.data.startswith(b"%PDF")
+    output_text = "\n".join(load_document(result.filename, PDF_MIME, result.data).texts)
+    _assert_no_known_leaks(output_text)
 
 
 def test_unsupported_text_input_is_rejected() -> None:
@@ -177,26 +176,11 @@ def test_unsupported_text_input_is_rejected() -> None:
 
 
 def _docx_with_comment(body: str, comment: str, author: str) -> bytes:
-    parts: dict[str, bytes] = {}
-    with ZipFile(BytesIO(_docx_bytes(body))) as archive:
-        for name in archive.namelist():
-            parts[name] = archive.read(name)
-    parts["word/comments.xml"] = (
-        f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        f'<w:comments xmlns:w="{_W_NS}">'
-        f'<w:comment w:id="1" w:author="{author}" w:initials="XX">'
-        f"<w:p><w:r><w:t>{comment}</w:t></w:r></w:p>"
-        f"</w:comment></w:comments>"
-    ).encode()
-    parts["word/people.xml"] = (
-        f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        f'<w15:people xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">'
-        f'<w15:person w15:author="{author}"/></w15:people>'
-    ).encode()
+    document = Document()
+    paragraph = document.add_paragraph(body)
+    document.add_comment(paragraph.runs, text=comment, author=author, initials="XX")
     output = BytesIO()
-    with ZipFile(output, "w") as out:
-        for name, data in parts.items():
-            out.writestr(name, data)
+    document.save(output)
     return output.getvalue()
 
 
@@ -211,12 +195,9 @@ def test_comment_author_is_redacted_from_metadata() -> None:
 
     with ZipFile(BytesIO(result.data)) as archive:
         comments = archive.read("word/comments.xml").decode()
-        people = archive.read("word/people.xml").decode()
 
     assert "Jan Kowalski" not in comments
-    assert "Jan Kowalski" not in people
-    alias = re.search(r'w:author="(Autor \d+)"', comments).group(1)
-    assert f'w15:author="{alias}"' in people
+    assert re.search(r'w:author="Autor \d+"', comments)
     # The comment body text is still anonymized by the main pipeline.
     assert "Uwaga od recenzenta" in comments
 

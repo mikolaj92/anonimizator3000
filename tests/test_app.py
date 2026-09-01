@@ -9,8 +9,8 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
-from doctotext import DOCX_MIME
 from docx import Document
+from docxtor import DOCX_MIME
 from fastapi import Request
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner

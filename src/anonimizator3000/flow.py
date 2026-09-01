@@ -1,6 +1,6 @@
 """The Carrier flow that wires the anonymization blocks into a dependency graph.
 
-convert -> load -> anonymize -> serialize, each a ``python_function`` step
+validate -> load -> anonymize -> serialize, each a ``python_function`` step
 resolved by ``module:function`` reference. Fala owns the ordering, retries, and
 status; the blocks in :mod:`anonimizator3000.steps` own the work.
 """
@@ -39,10 +39,10 @@ DOCUMENT_FLOW = CarrierFlowSpec(
     id=FLOW_ID,
     title="Anonimizacja dokumentu",
     steps=[
-        _step(CONVERT_STEP, "Normalizacja do DOCX", "convert", []),
+        _step(CONVERT_STEP, "Walidacja formatu", "convert", []),
         _step(LOAD_STEP, "Ekstrakcja tekstu", "load", [CONVERT_STEP]),
         _step(ANONYMIZE_STEP, "Anonimizacja", "anonymize", [LOAD_STEP]),
-        _step(SERIALIZE_STEP, "Zapis DOCX", "serialize", [ANONYMIZE_STEP]),
+        _step(SERIALIZE_STEP, "Zapis dokumentu", "serialize", [ANONYMIZE_STEP]),
         _step(
             REDACT_AUTHORS_STEP,
             "Anonimizacja autorów",

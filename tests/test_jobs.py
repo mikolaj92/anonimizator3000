@@ -2,8 +2,8 @@ import asyncio
 from io import BytesIO
 
 import pytest
-from doctotext import DOCX_MIME
 from docx import Document
+from docxtor import DOCX_MIME
 from posejdon import ReplacementKind
 
 from anonimizator3000.jobs import DocumentProcessingQueue, QueueRejected
