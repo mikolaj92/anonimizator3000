@@ -65,7 +65,7 @@ my-usermanager = { git = "https://github.com/mikolaj92/my-usermanager", tag = "v
 # binding and intentionally removed `RuntimeBackendService`.
 docxtor = { git = "https://github.com/mikolaj92/Docxtor.git", tag = "v0.4.3" }
 fala-runtime = { git = "https://github.com/mikolaj92/Fala.git", rev = "6dd634d18b4812faed04897426bc69322ef59c34" }
-posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", tag = "v0.1.0" }
+posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", tag = "v0.1.5" }
 en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }
 
 [tool.uv]
