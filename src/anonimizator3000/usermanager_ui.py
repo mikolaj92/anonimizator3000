@@ -36,7 +36,11 @@ from my_usermanager.manager import AuthorizationError, UserManager, UserProfileU
 from my_usermanager.memory import MemoryAuditStore, MemoryRoleStore
 from my_usermanager.models import Permission, User, ValidationError
 from my_usermanager.permissions import ADMIN_ROLE_NAME, BUILTIN_ROLES
-from my_usermanager.sessions import read_session_principal
+from my_usermanager.sessions import (
+    SessionPrincipal,
+    read_session_principal,
+    write_session_principal,
+)
 from my_usermanager.subjects import AuthenticatedSubject
 
 from anonimizator3000.passkey_setup import AuthDatabaseBinding
@@ -486,9 +490,11 @@ class AnonUserManagerHooks:
 
         session_user = None
         if "session" in request.scope:
-            raw = request.session.get("user")
-            if isinstance(raw, dict) and raw.get("id"):
-                session_user = raw
+            from anonimizator3000.platform_chrome import platform_user_from_principal
+
+            session_user = platform_user_from_principal(
+                read_session_principal(request.session)
+            )
         locale = request.query_params.get("lang") or request.cookies.get(
             LOCALE_COOKIE_NAME
         )
@@ -534,12 +540,18 @@ class AnonUserManagerHooks:
                     detail=str(exc),
                 ) from exc
             if "session" in request.scope:
-                session_user = request.session.get("user")
-                if isinstance(session_user, dict):
-                    session_user["name"] = (
-                        stored.display_name or stored.username or stored.user_id
+                principal = read_session_principal(request.session)
+                if principal is not None:
+                    write_session_principal(
+                        request.session,
+                        SessionPrincipal(
+                            user_id=principal.user_id,
+                            username=stored.username,
+                            display_name=stored.display_name,
+                            roles=principal.roles,
+                            permissions=principal.permissions,
+                        ),
                     )
-                    request.session["user"] = session_user
             return AuthenticatedSubject(
                 provider=MY_AUTH_PROVIDER,
                 subject=stored.user_id,

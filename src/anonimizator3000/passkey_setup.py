@@ -8,7 +8,7 @@ import secrets
 import sqlite3
 import uuid
 from contextlib import suppress
-from typing import Any, Literal
+from typing import Literal
 
 from app_factory.fastapi import AppFactoryUi
 from app_factory.platform import apply_platform_context
@@ -33,7 +33,6 @@ from my_usermanager.manager import UserManager
 from my_usermanager.memory import MemoryAuditStore, MemoryRoleStore
 from my_usermanager.models import (
     ExternalIdentity,
-    Grant,
     Scope,
     User,
     ValidationError,
@@ -125,15 +124,6 @@ def _passkey_config(settings: Settings) -> PasskeyConfig:
         rp_name=settings.passkey_rp_name,
         origin=settings.passkey_origin,
     )
-
-
-def _compute_session(um_user: User, grants: tuple[Grant, ...]) -> dict[str, Any]:
-    roles = {grant.role_name for grant in grants if grant.role_name}
-    return {
-        "id": um_user.user_id,
-        "name": um_user.display_name or um_user.username or um_user.user_id,
-        "is_admin": ADMIN_ROLE_NAME in roles,
-    }
 
 
 def session_csrf_token(request: Request) -> str | None:
@@ -362,8 +352,6 @@ def build_passkey_components(
         if user is None:
             return
         write_session_principal(request.session, principal_for(user))
-        grants = grant_store.list_grants_for_user(user.user_id)
-        request.session["user"] = _compute_session(user, grants)
         _ = session_csrf_token(request)
 
     def logout(_response, request: Request) -> None:
