@@ -9,6 +9,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
+from app_factory.platform import PlatformUser
 from docx import Document
 from docxtor import DOCX_MIME
 from fastapi import Request
@@ -303,7 +304,9 @@ def test_identity_lifecycle_paths_and_flags_match_bom() -> None:
     assert PLATFORM_PATHS.recovery == "/recover"
     assert PLATFORM_PATHS.credentials == "/account/passkeys"
     assert PLATFORM_PATHS.invite == "/admin/users"
-    config = platform_config(user={"id": "admin", "is_admin": True})
+    config = platform_config(
+        user=PlatformUser(display_name="Admin", is_admin=True, user_id="admin")
+    )
     assert config.enable_account is True
     assert config.enable_credentials is True
     assert config.enable_admin_users is True
@@ -544,3 +547,28 @@ def test_logout_is_only_rendered_on_account_surface() -> None:
     assert response.status_code == 200
     assert "data-platform-session" in response.text
     assert 'action="/logout"' in response.text
+
+
+def test_principal_only_session_drives_product_chrome() -> None:
+    session: dict = {}
+    write_session_principal(
+        session,
+        SessionPrincipal(
+            user_id="principal-only",
+            username="principal_user",
+            display_name="Principal Display",
+            roles=frozenset({ADMIN_ROLE_NAME}),
+            permissions=frozenset({Permission("admin.access")}),
+        ),
+    )
+    assert "user" not in session
+    payload = base64.b64encode(json.dumps(session).encode())
+    cookie = TimestampSigner(_settings_boot.session_secret).sign(payload).decode()
+
+    with TestClient(app) as client:
+        client.cookies.set(_settings_boot.session_cookie_name, cookie)
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Principal Display" in response.text
+    assert "data-platform-account-link" in response.text

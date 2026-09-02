@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from my_usermanager.sessions import read_session_principal
 from starlette.middleware.sessions import SessionMiddleware
 
 from anonimizator3000.anonymizer import create_anonymizer
@@ -21,6 +22,7 @@ from anonimizator3000.platform_chrome import (
     LOCALE_COOKIE_NAME,
     install_platform_chrome,
     platform_request_context,
+    platform_user_from_principal,
 )
 from anonimizator3000.upload import UploadError, read_multipart_document
 from anonimizator3000.usermanager_ui import install_anon_usermanager_ui
@@ -34,11 +36,10 @@ _settings_boot = settings_from_env()
 _auth_database_boot = migrate_auth_database(_settings_boot)
 
 
-def _session_user(request: Request) -> dict | None:
+def _session_user(request: Request):
     if "session" not in request.scope:
         return None
-    user = request.session.get("user")
-    return user if isinstance(user, dict) and user.get("id") else None
+    return platform_user_from_principal(read_session_principal(request.session))
 
 
 def _request_locale(request: Request) -> str:
