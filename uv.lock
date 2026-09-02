@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12, <3.14"
 
 [manifest]
@@ -84,9 +84,9 @@ requires-dist = [
     { name = "my-auth", extras = ["fastapi-htmx"], git = "https://github.com/mikolaj92/my-auth?tag=v0.4.8" },
     { name = "my-usermanager", extras = ["fastapi-htmx", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.5.11" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=25.0" },
-    { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
-    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
-    { name = "posejdon", extras = ["detectors"], marker = "extra == 'dev'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0" },
+    { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5" },
+    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5" },
+    { name = "posejdon", extras = ["detectors"], marker = "extra == 'dev'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5" },
     { name = "presidio-analyzer", specifier = ">=2.2.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pypdf", marker = "extra == 'dev'", specifier = ">=5.0.0" },
@@ -394,34 +394,34 @@ wheels = [
 
 [package.optional-dependencies]
 cudart = [
-    { name = "nvidia-cuda-runtime" },
+    { name = "nvidia-cuda-runtime", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 cufft = [
-    { name = "nvidia-cufft" },
+    { name = "nvidia-cufft", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 cufile = [
-    { name = "nvidia-cufile" },
+    { name = "nvidia-cufile", marker = "sys_platform == 'linux'" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti" },
+    { name = "nvidia-cuda-cupti", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 curand = [
-    { name = "nvidia-curand" },
+    { name = "nvidia-curand", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 cusolver = [
-    { name = "nvidia-cusolver" },
+    { name = "nvidia-cusolver", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse" },
+    { name = "nvidia-cusparse", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink" },
+    { name = "nvidia-nvjitlink", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc" },
+    { name = "nvidia-cuda-nvrtc", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx" },
+    { name = "nvidia-nvtx", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
 [[package]]
@@ -1184,8 +1184,8 @@ wheels = [
 
 [[package]]
 name = "posejdon"
-version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.0#f408b4d1e8ecf38fccb2db4609a935c7cc7d82dd" }
+version = "0.1.1"
+source = { git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5#714301d3e55cd5459b1c7a06b25aa37cedb8583a" }
 dependencies = [
     { name = "click" },
     { name = "httpx" },
