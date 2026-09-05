@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from collections.abc import Sequence
 from dataclasses import replace
 from typing import Final
 
@@ -14,23 +13,19 @@ from fastapi import FastAPI, HTTPException, Request, status
 from jinja2 import Environment
 from my_auth import SQLiteEnrollmentCapabilityStore
 from my_usermanager.adapters.fastapi_htmx import (
-    CapabilityOption,
     CsrfContext,
-    ExternalIdentityRow,
     InvitationResult,
     InvitationRow,
-    PermissionGrantRow,
     SessionCsrfProtection,
+    StandardUserManagerUiHooks,
     UserManagerUiConfig,
     UserRow,
     install_usermanager_ui,
-    row_key_from_user_id,
 )
 from my_usermanager.adapters.my_auth import MY_AUTH_PROVIDER
 from my_usermanager.adapters.my_auth_enrollment import build_enrollment_capability_issuer
 from my_usermanager.adapters.my_auth_sqlite import SQLiteAuthDatabase
 from my_usermanager.adapters.sqlite_invitations import SQLiteInvitationStore
-from my_usermanager.admin import AdminUserGrantSummary, GrantAdminService, UnsafeGrantMutationError
 from my_usermanager.invitations import InvitationError, InvitationGrant, InvitationService
 from my_usermanager.manager import AuthorizationError, UserManager, UserProfileUpdate
 from my_usermanager.memory import MemoryAuditStore, MemoryRoleStore
@@ -49,55 +44,6 @@ from anonimizator3000.platform_chrome import PLATFORM_PATHS
 _INVITE_TTL_SECONDS: Final = 7 * 24 * 60 * 60
 
 _SESSION_CSRF_KEY: Final = "csrf_token"
-
-
-def summary_to_user_row(
-    summary: AdminUserGrantSummary,
-    *,
-    invitation: InvitationRow | None = None,
-) -> UserRow:
-    """Project an admin grant summary into the adapter's row contract."""
-    user = summary.user
-    roles = tuple(
-        sorted(
-            {
-                grant.role_name
-                for grant in summary.grants
-                if grant.role_name is not None and grant.scope.is_global()
-            }
-        )
-    )
-    permissions = tuple(
-        PermissionGrantRow(
-            permission=grant.permission.name,
-            label=grant.permission.name,
-        )
-        for grant in summary.grants
-        if grant.permission is not None and grant.scope.is_global()
-    )
-    is_admin = ADMIN_ROLE_NAME in roles or any(
-        permission.name == "admin.access" for permission in summary.projection.permissions
-    )
-    return UserRow(
-        user_id=user.user_id,
-        row_key=row_key_from_user_id(user.user_id),
-        username=user.username or user.user_id,
-        display_name=user.display_name,
-        email=user.email,
-        disabled=user.disabled,
-        is_admin=is_admin,
-        roles=roles,
-        permissions=permissions,
-        external_identities=tuple(
-            ExternalIdentityRow(provider=identity.provider, subject=identity.subject)
-            for identity in sorted(
-                user.external_identities,
-                key=lambda item: (item.provider, item.subject),
-            )
-        ),
-        account_status=user.status,
-        invitation=invitation,
-    )
 
 
 def _invitation_row(invitation) -> InvitationRow:
@@ -163,7 +109,25 @@ class _AuthDb:
         raise RuntimeError("auth database is not configured")
 
 
-class AnonUserManagerHooks:
+class _LiveStore:
+    """Open and close the currently bound SQLite stores per operation."""
+
+    def __init__(self, database: _AuthDb, name: str) -> None:
+        self._database = database
+        self._name = name
+
+    def __getattr__(self, method_name: str):
+        def call(*args, **kwargs):
+            stores = self._database.get().stores()
+            try:
+                return getattr(getattr(stores, self._name), method_name)(*args, **kwargs)
+            finally:
+                stores.close()
+
+        return call
+
+
+class AnonUserManagerHooks(StandardUserManagerUiHooks):
     """Host-owned policy and persistence for package account + admin users UI."""
 
     def __init__(
@@ -171,8 +135,19 @@ class AnonUserManagerHooks:
         database: SQLiteAuthDatabase | AuthDatabaseBinding | None = None,
     ) -> None:
         self._auth = _AuthDb(database)
+        manager = UserManager(
+            users=_LiveStore(self._auth, "users"),
+            roles=MemoryRoleStore(),
+            grants=_LiveStore(self._auth, "grants"),
+        )
+        super().__init__(
+            manager=manager,
+            current_user=self._current_user,
+            require_admin=self._require_admin,
+            role_names=tuple(sorted(BUILTIN_ROLES)),
+        )
 
-    def get_current_user(self, request: Request) -> AuthenticatedSubject | None:
+    def _current_user(self, request: Request) -> AuthenticatedSubject | None:
         if "session" not in request.scope:
             return None
         principal = read_session_principal(request.session)
@@ -186,7 +161,7 @@ class AnonUserManagerHooks:
             display_name=principal.display_name,
         )
 
-    def require_admin(
+    def _require_admin(
         self, request: Request, current_user: AuthenticatedSubject
     ) -> None:
         if "session" not in request.scope:
@@ -208,129 +183,25 @@ class AnonUserManagerHooks:
 
     def list_users(
         self, request: Request, current_user: AuthenticatedSubject
-    ) -> Sequence[UserRow]:
-        del current_user
+    ) -> tuple[UserRow, ...]:
         database = self._auth.get(request)
-        stores = database.stores()
         connection = _invitation_connection(database)
         try:
             invitations = SQLiteInvitationStore(connection)
-            service = GrantAdminService(
-                users=stores.users,
-                roles=MemoryRoleStore(),
-                grants=stores.grants,
-            )
-            summaries = service.list_users(limit=500, offset=0)
-            rows = []
-            for summary in summaries:
-                pending = invitations.get_pending_for_user(summary.user.user_id)
-                rows.append(
-                    summary_to_user_row(
-                        summary,
-                        invitation=None if pending is None else _invitation_row(pending),
-                    )
+            return tuple(
+                replace(
+                    row,
+                    invitation=(
+                        None
+                        if (pending := invitations.get_pending_for_user(row.user_id)) is None
+                        else _invitation_row(pending)
+                    ),
                 )
-            return tuple(rows)
+                for row in super().list_users(request, current_user)
+            )
         finally:
-            stores.close()
             if connection is not database.database:
                 connection.close()
-
-    def role_options(
-        self, request: Request, current_user: AuthenticatedSubject
-    ) -> Sequence[str]:
-        del request, current_user
-        return tuple(sorted(BUILTIN_ROLES.keys()))
-
-    def capability_options(
-        self, request: Request, current_user: AuthenticatedSubject
-    ) -> Sequence[CapabilityOption]:
-        del request, current_user
-        return ()
-
-    def set_user_disabled(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        user_id: str,
-        disabled: bool,
-    ) -> UserRow:
-        del current_user
-        stores = self._auth.get(request).stores()
-        try:
-            user = stores.users.get(user_id)
-            if user is None:
-                raise HTTPException(status_code=404, detail="user not found")
-            updated = replace(user, disabled=disabled)
-            stores.users.update(updated)
-            service = GrantAdminService(
-                users=stores.users,
-                roles=MemoryRoleStore(),
-                grants=stores.grants,
-            )
-            return summary_to_user_row(service.summary_for_user(updated))
-        finally:
-            stores.close()
-
-    def grant_role(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        user_id: str,
-        role_name: str,
-    ) -> UserRow:
-        return self._mutate_role(
-            request,
-            current_user,
-            user_id=user_id,
-            role_name=role_name,
-            action="grant",
-        )
-
-    def revoke_role(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        user_id: str,
-        role_name: str,
-    ) -> UserRow:
-        return self._mutate_role(
-            request,
-            current_user,
-            user_id=user_id,
-            role_name=role_name,
-            action="revoke",
-        )
-
-    def grant_permission(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        user_id: str,
-        permission: PermissionGrantRow,
-    ) -> UserRow:
-        return self._mutate_permission(
-            request,
-            current_user,
-            user_id=user_id,
-            permission=permission,
-            action="grant",
-        )
-
-    def revoke_permission(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        user_id: str,
-        permission: PermissionGrantRow,
-    ) -> UserRow:
-        return self._mutate_permission(
-            request,
-            current_user,
-            user_id=user_id,
-            permission=permission,
-            action="revoke",
-        )
 
     def csrf_context(self, request: Request) -> CsrfContext:
         token = SessionCsrfProtection(session_key=_SESSION_CSRF_KEY).token(request)
@@ -338,22 +209,6 @@ class AnonUserManagerHooks:
             hidden_inputs=(("csrf", token),),
             headers={"X-CSRF-Token": token},
         )
-
-    def after_user_disabled_changed(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        row: UserRow,
-    ) -> None:
-        del request, current_user, row
-
-    def render_passkey_panel(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-    ):
-        del request, current_user
-        return None
 
     def invite_user(
         self,
@@ -456,13 +311,8 @@ class AnonUserManagerHooks:
             user = stores.users.get(revoked.user_id)
             if user is None:
                 raise HTTPException(status_code=404, detail="user not found")
-            grants = GrantAdminService(
-                users=stores.users,
-                roles=MemoryRoleStore(),
-                grants=stores.grants,
-            )
-            return summary_to_user_row(
-                grants.summary_for_user(user),
+            return replace(
+                self._row(user),
                 invitation=_invitation_row(revoked),
             )
         except InvitationError as exc:
@@ -566,90 +416,6 @@ class AnonUserManagerHooks:
             )
         finally:
             stores.close()
-
-    def _mutate_role(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        *,
-        user_id: str,
-        role_name: str,
-        action: str,
-    ) -> UserRow:
-        stores = self._auth.get(request).stores()
-        try:
-            service = GrantAdminService(
-                users=stores.users,
-                roles=MemoryRoleStore(),
-                grants=stores.grants,
-            )
-            try:
-                if action == "grant":
-                    service.grant_role(
-                        actor_id=current_user.user_id,
-                        target_user_id=user_id,
-                        role_name=role_name,
-                    )
-                else:
-                    service.revoke_role(
-                        actor_id=current_user.user_id,
-                        target_user_id=user_id,
-                        role_name=role_name,
-                    )
-            except (ValueError, ValidationError, UnsafeGrantMutationError) as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(exc),
-                ) from exc
-            user = stores.users.get(user_id)
-            if user is None:
-                raise HTTPException(status_code=404, detail="user not found")
-            return summary_to_user_row(service.summary_for_user(user))
-        finally:
-            stores.close()
-
-    def _mutate_permission(
-        self,
-        request: Request,
-        current_user: AuthenticatedSubject,
-        *,
-        user_id: str,
-        permission: PermissionGrantRow,
-        action: str,
-    ) -> UserRow:
-        stores = self._auth.get(request).stores()
-        try:
-            service = GrantAdminService(
-                users=stores.users,
-                roles=MemoryRoleStore(),
-                grants=stores.grants,
-            )
-            perm = Permission(name=permission.permission)
-            try:
-                if action == "grant":
-                    service.grant_permission(
-                        actor_id=current_user.user_id,
-                        target_user_id=user_id,
-                        permission=perm,
-                    )
-                else:
-                    service.revoke_permission(
-                        actor_id=current_user.user_id,
-                        target_user_id=user_id,
-                        permission=perm,
-                    )
-            except (ValueError, ValidationError, UnsafeGrantMutationError) as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(exc),
-                ) from exc
-            user = stores.users.get(user_id)
-            if user is None:
-                raise HTTPException(status_code=404, detail="user not found")
-            return summary_to_user_row(service.summary_for_user(user))
-        finally:
-            stores.close()
-
 
 def install_anon_usermanager_ui(
     app: FastAPI,
