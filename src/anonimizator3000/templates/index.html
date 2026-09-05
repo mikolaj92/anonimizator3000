@@ -8,7 +8,7 @@
   <div class="card upload-card">
     <header>
       <div class="title-row">
-        <h2 class="card-title">Plik</h2>
+        <h2>Plik</h2>
         <details id="privacy-disclosure" class="info-disclosure">
           <summary
             aria-label="Informacje o prywatności"
@@ -22,8 +22,8 @@
           </div>
         </details>
       </div>
-      <p class="card-description">Wrzucasz dokument. Pobierasz zanonimizowany.</p>
-      <p class="card-description" role="note">
+      <p class="text-muted-foreground">Wrzucasz dokument. Pobierasz zanonimizowany.</p>
+      <p class="text-muted-foreground" role="note">
         Limit: {{ settings.rate_limit_submissions }} dokumentów na
         {% if settings.rate_limit_window_seconds % 60 == 0 %}
           {{ settings.rate_limit_window_seconds // 60 }} minut

@@ -1,33 +1,3 @@
-:root {
-  color-scheme: light;
-  --page-bg: #f4f6f8;
-  --surface: #ffffff;
-  --surface-soft: #f8faf9;
-  --ink: #17191d;
-  --muted: #68707d;
-  --line: #d9e0e2;
-  --accent: #0f766e;
-  --accent-strong: #0b5d56;
-  --accent-soft: #dff4ef;
-  --info: #315cfd;
-  --danger: #b42318;
-  --shadow: 0 18px 50px rgb(23 25 29 / 8%);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  min-height: 100vh;
-  margin: 0;
-  background:
-    linear-gradient(180deg, #ffffff 0, var(--page-bg) 320px),
-    var(--page-bg);
-  color: var(--ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
 svg {
   fill: none;
   stroke: currentColor;
@@ -48,12 +18,6 @@ svg {
   gap: 10px;
 }
 
-.badge {
-  border-color: var(--line);
-  background: var(--surface);
-  color: var(--ink);
-}
-
 .grid {
   display: grid;
   grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
@@ -63,10 +27,6 @@ svg {
 
 .upload-card,
 .result-card {
-  border-color: var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
 }
 
 .upload-card {
@@ -94,10 +54,10 @@ svg {
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface-soft);
-  color: var(--muted);
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-weight: 800;
   line-height: 1;
   list-style: none;
@@ -114,9 +74,9 @@ svg {
 
 .info-disclosure summary:hover,
 .info-disclosure[open] summary {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  border-color: var(--primary);
+  background: var(--muted);
+  color: var(--primary);
 }
 
 .info-panel {
@@ -126,15 +86,14 @@ svg {
   right: 0;
   width: min(340px, calc(100vw - 48px));
   padding: 16px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+  background: var(--card);
 }
 
 .info-panel p {
   margin: 0;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 0.86rem;
   line-height: 1.45;
 }
@@ -147,7 +106,7 @@ svg {
 .empty-state,
 .job-meta,
 .progress-row {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .upload-form {
@@ -160,7 +119,7 @@ svg {
 
 .document-ready p,
 .alert p {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .style-choice {
@@ -168,14 +127,14 @@ svg {
   gap: 8px;
   margin: 0;
   padding: 14px 16px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface-soft);
+  background: var(--muted);
 }
 
 .style-choice legend {
   padding: 0 6px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -191,35 +150,14 @@ svg {
 .style-option code {
   padding: 1px 6px;
   border-radius: 4px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--muted);
+  color: var(--primary);
   font-size: 0.85rem;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  min-height: 44px;
-  width: fit-content;
-  border-radius: 8px;
-}
-
-.upload-form .btn,
-.actions-row .btn {
-  background: var(--accent);
-  color: #ffffff;
 }
 
 .upload-form .btn {
   width: 100%;
   align-self: end;
-}
-
-.upload-form .btn:hover,
-.actions-row .btn:hover {
-  background: var(--accent-strong);
 }
 
 .icon {
@@ -246,9 +184,9 @@ svg {
   place-items: center;
   gap: 16px;
   min-height: 420px;
-  border: 1px dashed var(--line);
+  border: 1px dashed var(--border);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--card);
   text-align: center;
 }
 
@@ -275,17 +213,13 @@ svg {
 
 .job-meta span {
   padding: 4px 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface-soft);
+  background: var(--muted);
 }
 
 .findings {
   margin-bottom: 18px;
-}
-
-.alert {
-  border-radius: 8px;
 }
 
 .alert p {
@@ -303,13 +237,13 @@ svg {
   min-height: 116px;
   margin-bottom: 18px;
   padding: 20px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface-soft);
+  background: var(--muted);
 }
 
 .document-ready svg {
-  color: var(--accent);
+  color: var(--primary);
 }
 
 .document-ready p {

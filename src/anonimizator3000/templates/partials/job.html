@@ -9,7 +9,7 @@
 >
   <header>
     <div class="job-title-row">
-      <h2 class="card-title">
+      <h2>
         {% if job.status == "done" %}
           Gotowe
         {% elif job.status == "failed" %}
@@ -20,7 +20,7 @@
           W kolejce
         {% endif %}
       </h2>
-      <span class="badge">{{ "%.1fs"|format(job.elapsed_seconds) }}</span>
+      <span class="badge" data-variant="outline">{{ "%.1fs"|format(job.elapsed_seconds) }}</span>
     </div>
   </header>
 
@@ -42,7 +42,7 @@
         </div>
       </div>
     {% elif job.status == "failed" %}
-      <div class="alert" role="alert">
+      <div class="alert" data-variant="destructive" role="alert">
         <strong>Błąd</strong>
         <p>{{ job.error }}</p>
       </div>
@@ -50,11 +50,11 @@
       {% if job.findings %}
         <div class="findings" aria-label="Wykryte typy danych">
           {% for entity, count in job.findings.items() %}
-            <span class="badge">{{ entity }}: {{ count }}</span>
+            <span class="badge" data-variant="secondary">{{ entity }}: {{ count }}</span>
           {% endfor %}
         </div>
       {% else %}
-        <div class="alert muted" role="status">Nie wykryto danych do anonimizacji.</div>
+        <div class="alert" role="status">Nie wykryto danych do anonimizacji.</div>
       {% endif %}
 
       <div class="document-ready">
@@ -74,7 +74,7 @@
         </div>
       </div>
       <div class="actions-row">
-        <a class="btn" href="/jobs/{{ job.id }}/download">
+        <a class="btn" data-variant="default" href="/jobs/{{ job.id }}/download">
           <svg aria-hidden="true" viewBox="0 0 24 24" class="icon">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
