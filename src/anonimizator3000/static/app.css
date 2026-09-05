@@ -1,4 +1,5 @@
-svg {
+.document-ready svg,
+.actions-row svg {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -18,15 +19,11 @@ svg {
   gap: 10px;
 }
 
-.grid {
+.document-layout {
   display: grid;
   grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   gap: 28px;
   align-items: start;
-}
-
-.upload-card,
-.result-card {
 }
 
 .upload-card {
@@ -102,7 +99,6 @@ svg {
   margin-top: 10px;
 }
 
-.card-description,
 .empty-state,
 .job-meta,
 .progress-row {
@@ -117,8 +113,7 @@ svg {
   grid-template-rows: auto auto minmax(64px, 1fr);
 }
 
-.document-ready p,
-.alert p {
+.document-ready p {
   color: var(--muted-foreground);
 }
 
@@ -222,14 +217,6 @@ svg {
   margin-bottom: 18px;
 }
 
-.alert p {
-  margin: 4px 0 0;
-}
-
-.alert.muted {
-  margin-bottom: 16px;
-}
-
 .document-ready {
   display: flex;
   align-items: center;
@@ -261,7 +248,7 @@ svg {
     padding: 28px 0;
   }
 
-  .grid {
+  .document-layout {
     grid-template-columns: 1fr;
     gap: 18px;
   }
