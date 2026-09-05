@@ -363,18 +363,12 @@ def build_passkey_components(
         principal = read_session_principal(request.session)
         return get_auth_user(principal.user_id) if principal is not None else None
 
-    def registration_allowed(request: Request) -> bool:
-        if "session" not in request.scope:
-            return True
-        principal = read_session_principal(request.session)
-        return principal is None or get_auth_user(principal.user_id) is not None
-
     def render_login(request: Request):
         del request
         raise RuntimeError("interactive rendering is owned by my-auth.fastapi_htmx")
 
-    def render_register(request: Request, *, bootstrap: bool):
-        del request, bootstrap
+    def render_register(request: Request):
+        del request
         raise RuntimeError("interactive rendering is owned by my-auth.fastapi_htmx")
 
     hooks = PasskeyRouteHooks(
@@ -384,7 +378,6 @@ def build_passkey_components(
         get_auth_user=get_auth_user,
         login=login,
         logout=logout,
-        registration_allowed=registration_allowed,
         render_login=render_login,
         render_register=render_register,
         prepare_capability_registration_context=prepare_capability_registration_context,

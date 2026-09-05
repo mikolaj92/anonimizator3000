@@ -14,8 +14,8 @@ def test_pyproject_pins_git_sources_by_tag_or_rev_not_main() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     sources = _uv_sources()
 
-    assert sources["app-factory"]["tag"] == "v0.6.16"
-    assert sources["my-auth"]["tag"] == "v0.4.8"
+    assert sources["app-factory"]["tag"] == "v0.6.22"
+    assert sources["my-auth"]["tag"] == "v0.5.4"
     assert sources["posejdon"]["tag"] == "v0.1.5"
     assert sources["fala-runtime"]["rev"] == "6dd634d18b4812faed04897426bc69322ef59c34"
     assert sources["docxtor"]["tag"] == "v0.4.3"
@@ -32,20 +32,17 @@ def test_readme_documents_tag_and_rev_pins_instead_of_main() -> None:
 
     assert "wskazuje branche `main`" not in readme
     assert "branch=main" not in readme
-    assert "app-factory" in readme and "v0.6.16" in readme
-    assert "my-auth" in readme and "v0.4.8" in readme
+    assert "app-factory" in readme and "v0.6.22" in readme
+    assert "my-auth" in readme and "v0.5.4" in readme
     assert "posejdon" in readme and "v0.1.5" in readme
     assert "fala-runtime" in readme
     assert "Docxtor" in readme and "v0.4.3" in readme
     assert "rev" in readme
 
 
-def test_docs_do_not_claim_missing_compat_v0611_row() -> None:
+def test_docs_claim_current_compat_bom() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert "Platform BOM from app-factory v0.6.16 COMPAT.md" not in pyproject
-    assert "to nie jest wiersz COMPAT.md" in readme
-    assert "v0.6.10" in readme and "v0.4.5" in readme and "v0.5.6" in readme
-    assert "COMPAT.md has no v0.6.16 line" in pyproject
-    assert "v0.6.10 + my-auth v0.4.5" in pyproject
+    assert "current platform BOM from app-factory COMPAT.md" in pyproject
+    assert "aktualny BOM" in readme

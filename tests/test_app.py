@@ -304,7 +304,7 @@ class _FakeUploadRequest:
 
 
 def test_identity_lifecycle_paths_and_flags_match_bom() -> None:
-    """Host chrome exposes the v0.6.16 identity-lifecycle path/flag matrix."""
+    """Host chrome exposes the v0.6.22 identity-lifecycle path/flag matrix."""
     assert PLATFORM_PATHS.activation == "/activate"
     assert PLATFORM_PATHS.recovery == "/recover"
     assert PLATFORM_PATHS.credentials == "/account/passkeys"
@@ -416,7 +416,6 @@ def test_passkey_hooks_ignore_legacy_session_for_existing_user(tmp_path: Path) -
     )
 
     assert hooks.get_session_user(request) is None
-    assert hooks.registration_allowed(request) is True
 
 
 @pytest.mark.parametrize("path", ("/login", "/account", "/admin/users"))
