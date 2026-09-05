@@ -106,6 +106,10 @@ def test_index_does_not_show_removed_header_copy() -> None:
     assert "/static/basecoat/" not in response.text
     assert "/static/htmx.min.js" not in response.text
     assert "/static/app.css" in response.text
+    assert "data-app-file-upload" in response.text
+    assert "data-app-file-upload-field" in response.text
+    assert 'data-max-bytes="5000000"' in response.text
+    assert 'name="document"' in response.text
     assert "100 dokumentów" in response.text
     assert "10 minut" in response.text
 
@@ -125,7 +129,8 @@ def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
         )
 
         assert response.status_code == 200
-        assert 'role="progressbar"' in response.text
+        assert '<progress' in response.text
+        assert 'class="app-progress w-full"' in response.text
         assert 'id="job-card"' in response.text
         assert 'id="job-panel"' not in response.text
         job_id = response.text.split("/jobs/", 1)[1].split('"', 1)[0]
@@ -212,7 +217,7 @@ def test_plain_form_upload_redirects_to_server_rendered_job_page() -> None:
         page = client.get(response.headers["location"])
 
     assert page.status_code == 200
-    assert '<form\n        hx-post="/jobs"' in page.text
+    assert 'data-app-file-upload' in page.text
     assert 'id="job-card"' in page.text
     assert page.text.count('id="job-panel"') == 1
 
@@ -227,7 +232,7 @@ def test_plain_form_validation_error_returns_full_page() -> None:
     assert response.status_code == 413
     assert "Odrzucono upload" in response.text
     assert 'id="job-panel"' in response.text
-    assert '<form\n        hx-post="/jobs"' in response.text
+    assert 'data-app-file-upload' in response.text
 
 
 def test_upload_size_limit_returns_fragment() -> None:

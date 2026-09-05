@@ -75,24 +75,6 @@ svg {
   flex-direction: column;
 }
 
-.upload-card .card-header,
-.result-card .card-header {
-  padding: 28px 28px 0;
-}
-
-.upload-card .card-content,
-.result-card .card-content {
-  padding: 24px 28px 28px;
-}
-
-.upload-card .card-content {
-  display: flex;
-  flex: 1;
-}
-
-.card-title {
-  letter-spacing: 0;
-}
 
 .title-row {
   position: relative;
@@ -176,42 +158,9 @@ svg {
   grid-template-rows: auto auto minmax(64px, 1fr);
 }
 
-.dropzone {
-  display: grid;
-  place-items: center;
-  gap: 12px;
-  min-height: 230px;
-  padding: 34px;
-  border: 1px dashed #b8c5c7;
-  border-radius: 8px;
-  background: var(--surface-soft);
-  text-align: center;
-  cursor: pointer;
-  transition:
-    border-color 0.16s ease,
-    background 0.16s ease,
-    transform 0.16s ease;
-}
-
-.dropzone:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  transform: translateY(-1px);
-}
-
-.dropzone span {
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.dropzone small,
 .document-ready p,
 .alert p {
   color: var(--muted);
-}
-
-.input[type="file"] {
-  min-height: 44px;
 }
 
 .style-choice {
@@ -317,33 +266,6 @@ svg {
   align-content: center;
 }
 
-.progress-track {
-  position: relative;
-  height: 12px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e8edf0;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--info));
-  transition: width 0.25s ease;
-}
-
-.progress-fill.is-active {
-  position: relative;
-}
-
-.progress-fill.is-active::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 45%), transparent);
-  animation: progress-sheen 1.2s linear infinite;
-}
-
 .job-meta {
   display: flex;
   flex-wrap: wrap;
@@ -399,16 +321,6 @@ svg {
   justify-content: flex-end;
 }
 
-@keyframes progress-sheen {
-  from {
-    transform: translateX(-100%);
-  }
-
-  to {
-    transform: translateX(100%);
-  }
-}
-
 @media (max-width: 800px) {
   .shell {
     width: min(100% - 24px, 1180px);
@@ -418,20 +330,6 @@ svg {
   .grid {
     grid-template-columns: 1fr;
     gap: 18px;
-  }
-
-  .upload-card .card-header,
-  .result-card .card-header {
-    padding: 22px 22px 0;
-  }
-
-  .upload-card .card-content,
-  .result-card .card-content {
-    padding: 20px 22px 22px;
-  }
-
-  .dropzone {
-    min-height: 190px;
   }
 
   .upload-card {

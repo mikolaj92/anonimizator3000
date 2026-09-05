@@ -7,7 +7,7 @@
     hx-swap="outerHTML"
   {% endif %}
 >
-  <div class="card-header">
+  <header>
     <div class="job-title-row">
       <h2 class="card-title">
         {% if job.status == "done" %}
@@ -22,23 +22,17 @@
       </h2>
       <span class="badge">{{ "%.1fs"|format(job.elapsed_seconds) }}</span>
     </div>
-  </div>
+  </header>
 
-  <div class="card-content">
+  <section>
     {% if job.status in ["queued", "processing"] %}
       <div class="progress-block">
-        <div
-          class="progress-track"
-          role="progressbar"
-          aria-valuenow="{{ job.progress_percent }}"
-          aria-valuemin="0"
-          aria-valuemax="100"
-        >
-          <div
-            class="progress-fill {% if job.status == "processing" %}is-active{% endif %}"
-            style="width: {{ job.progress_percent }}%"
-          ></div>
-        </div>
+        <progress
+          class="app-progress w-full"
+          value="{{ job.progress_percent }}"
+          max="100"
+          aria-label="Postęp anonimizacji"
+        >{{ job.progress_percent }}%</progress>
         <div class="job-meta">
           <span>{{ job.status }}</span>
           {% if job.queue_position %}
@@ -90,5 +84,5 @@
         </a>
       </div>
     {% endif %}
-  </div>
+  </section>
 </div>
