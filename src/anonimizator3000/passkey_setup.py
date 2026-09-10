@@ -10,9 +10,7 @@ import uuid
 from contextlib import suppress
 from typing import Literal
 
-from app_factory.fastapi import AppFactoryUi
-from app_factory.platform import apply_platform_context
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import HTTPException, Request
 from my_auth import (
     EnrollmentCapabilityNotFound,
     PasskeyConfig,
@@ -22,8 +20,7 @@ from my_auth import (
     SQLiteEnrollmentCapabilityStore,
     registration_context_from_capability,
 )
-from my_auth.fastapi import PasskeyCookies, PasskeyRouteHooks
-from my_auth.fastapi_htmx import PasskeyUi, PasskeyUiConfig, install_passkey_ui
+from my_auth.fastapi import PasskeyCookies
 from my_auth.passkeys import PasskeyUser, RegistrationContext, VerifiedRegistration
 from my_usermanager.adapters.my_auth import MY_AUTH_PROVIDER
 from my_usermanager.adapters.my_auth_sqlite import SQLiteAuthDatabase
@@ -47,13 +44,6 @@ from my_usermanager.sessions import (
 from my_usermanager.stores import DuplicateGrantError, DuplicateUserError, UserQuery
 
 from anonimizator3000.config import Settings
-from anonimizator3000.platform_chrome import (
-    DEFAULT_LOCALE,
-    LOCALE_COOKIE_NAME,
-    PASSKEY_PATHS,
-    SUPPORTED_LOCALES,
-    login_platform_config,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -251,8 +241,8 @@ def build_passkey_components(
     auth_database: SQLiteAuthDatabase,
     settings: Settings,
     database_binding: AuthDatabaseBinding | None = None,
-) -> tuple[PasskeyService, PasskeyRouteHooks, AuthDatabaseBinding]:
-    """Build shared service/hooks for packaged passkey HTML routes."""
+) -> tuple[PasskeyService, _PasskeyPolicyHooks, AuthDatabaseBinding]:
+    """Build shared service and host policy hooks for packaged passkey HTML."""
     binding = database_binding or AuthDatabaseBinding(auth_database)
     user_store = _OperationStoreProxy(binding, "users")
     grant_store = _OperationStoreProxy(binding, "grants")
@@ -363,63 +353,41 @@ def build_passkey_components(
         principal = read_session_principal(request.session)
         return get_auth_user(principal.user_id) if principal is not None else None
 
-    def render_login(request: Request):
-        del request
-        raise RuntimeError("interactive rendering is owned by my-auth.fastapi_htmx")
-
-    def render_register(request: Request):
-        del request
-        raise RuntimeError("interactive rendering is owned by my-auth.fastapi_htmx")
-
-    hooks = PasskeyRouteHooks(
+    hooks = _PasskeyPolicyHooks(
         get_session_user=get_session_user,
         prepare_registration=prepare_registration,
         complete_registration=complete_registration,
         get_auth_user=get_auth_user,
         login=login,
         logout=logout,
-        render_login=render_login,
-        render_register=render_register,
         prepare_capability_registration_context=prepare_capability_registration_context,
     )
     return service, hooks, binding
 
 
-def install_passkey_routes(
-    app: FastAPI,
-    *,
-    platform: AppFactoryUi,
-    auth_database: SQLiteAuthDatabase,
-    settings: Settings,
-) -> tuple[PasskeyUi, AuthDatabaseBinding]:
-    """Install packaged passkey pages while retaining host-owned hooks."""
-    service, hooks, binding = build_passkey_components(auth_database, settings)
-    passkey_ui = install_passkey_ui(
-        app,
-        platform=platform,
-        service=service,
-        hooks=hooks,
-        config=PasskeyUiConfig(
-            paths=PASSKEY_PATHS,
-            cookies=PasskeyCookies(
-                secure=settings.session_cookie_secure,
-                samesite="lax",
-            ),
-            csrf_token=session_csrf_token,
-            login_success_url="/",
-            register_success_url="/",
-            activation_success_url="/account",
-            recovery_success_url="/login",
-            locale_cookie_name=LOCALE_COOKIE_NAME,
-            locale_query_param="lang",
-            supported_locales=SUPPORTED_LOCALES,
-            default_locale=DEFAULT_LOCALE,
-        ),
-    )
-    if getattr(passkey_ui, "environment", None) is not None:
-        apply_platform_context(passkey_ui.environment, login_platform_config())
-    app.state.auth_database_binding = binding
-    return passkey_ui, binding
+class _PasskeyPolicyHooks:
+    """Host persistence and session policy; ceremony render stays in the kit."""
+
+    def __init__(
+        self,
+        *,
+        get_session_user,
+        prepare_registration,
+        complete_registration,
+        get_auth_user,
+        login,
+        logout,
+        prepare_capability_registration_context,
+    ) -> None:
+        self.get_session_user = get_session_user
+        self.prepare_registration = prepare_registration
+        self.complete_registration = complete_registration
+        self.get_auth_user = get_auth_user
+        self.login = login
+        self.logout = logout
+        self.prepare_capability_registration_context = (
+            prepare_capability_registration_context
+        )
 
 
 def bootstrap_admin(auth_database: SQLiteAuthDatabase) -> None:

@@ -1,4 +1,4 @@
-"""Host hooks for my-usermanager install_usermanager_ui (account + admin)."""
+"""Host policy and persistence for packaged my-usermanager account + admin UI."""
 
 from __future__ import annotations
 
@@ -7,10 +7,7 @@ import uuid
 from dataclasses import replace
 from typing import Final
 
-from app_factory.fastapi import AppFactoryUi
-from app_factory.platform import IDENTITY_AUTHENTICATED_SHELL
-from fastapi import FastAPI, HTTPException, Request, status
-from jinja2 import Environment
+from fastapi import HTTPException, Request, status
 from my_auth import SQLiteEnrollmentCapabilityStore
 from my_usermanager.adapters.fastapi_htmx import (
     CsrfContext,
@@ -18,9 +15,7 @@ from my_usermanager.adapters.fastapi_htmx import (
     InvitationRow,
     SessionCsrfProtection,
     StandardUserManagerUiHooks,
-    UserManagerUiConfig,
     UserRow,
-    install_usermanager_ui,
 )
 from my_usermanager.adapters.my_auth import MY_AUTH_PROVIDER
 from my_usermanager.adapters.my_auth_enrollment import build_enrollment_capability_issuer
@@ -416,31 +411,3 @@ class AnonUserManagerHooks(StandardUserManagerUiHooks):
             )
         finally:
             stores.close()
-
-def install_anon_usermanager_ui(
-    app: FastAPI,
-    *,
-    platform: AppFactoryUi,
-    environment: Environment,
-    database: SQLiteAuthDatabase | AuthDatabaseBinding | None = None,
-) -> None:
-    """Mount package-owned account/profile and admin users surfaces."""
-    hooks = AnonUserManagerHooks(database)
-    install_usermanager_ui(
-        app,
-        platform=platform,
-        hooks=hooks,
-        environment=environment,
-        config=UserManagerUiConfig(
-            account_path=PLATFORM_PATHS.account,
-            profile_path="/account/profile",
-            users_path=PLATFORM_PATHS.admin_users,
-            invite_path="/admin/users/invite",
-            login_url=PLATFORM_PATHS.login,
-            logout_path=PLATFORM_PATHS.logout,
-            account_enabled=True,
-            admin_enabled=True,
-            csrf_protection=SessionCsrfProtection(session_key=_SESSION_CSRF_KEY),
-            base_template=IDENTITY_AUTHENTICATED_SHELL,
-        ),
-    )

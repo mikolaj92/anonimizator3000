@@ -4,11 +4,13 @@ from pathlib import Path
 from urllib.parse import quote
 
 import uvicorn
-from app_factory.fastapi import install_app_factory_ui
+from app_factory.adapters import PasskeyBinding, UserManagerBinding, install_identity_adapters
+from app_factory.csrf import SessionCsrfProtection
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from my_auth.fastapi import PasskeyCookies
 from my_usermanager.sessions import read_session_principal
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -16,16 +18,22 @@ from anonimizator3000.anonymizer import create_anonymizer
 from anonimizator3000.auth_stores import migrate_auth_database
 from anonimizator3000.config import Settings, normalize_replacement_style, settings_from_env
 from anonimizator3000.jobs import DocumentProcessingQueue, JobSnapshot, QueueRejected
-from anonimizator3000.passkey_setup import bootstrap_admin, install_passkey_routes
+from anonimizator3000.passkey_setup import (
+    bootstrap_admin,
+    build_passkey_components,
+    session_csrf_token,
+)
 from anonimizator3000.platform_chrome import (
     DEFAULT_LOCALE,
     LOCALE_COOKIE_NAME,
-    install_platform_chrome,
+    PLATFORM_CONFIG,
+    SUPPORTED_LOCALES,
+    platform_locales,
     platform_request_context,
     platform_user_from_principal,
 )
 from anonimizator3000.upload import UploadError, read_multipart_document
-from anonimizator3000.usermanager_ui import install_anon_usermanager_ui
+from anonimizator3000.usermanager_ui import AnonUserManagerHooks
 
 PACKAGE_DIR = Path(__file__).parent
 REPO_DIR = PACKAGE_DIR.parents[1]
@@ -50,6 +58,13 @@ def _request_locale(request: Request) -> str:
     if isinstance(cookie, str) and cookie:
         return cookie
     return DEFAULT_LOCALE
+
+
+def _locales(request: Request):
+    return platform_locales(
+        current_path=request.url.path,
+        locale=_request_locale(request),
+    )
 
 
 def _page_context(request: Request, **extra) -> dict:
@@ -98,23 +113,40 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Anonimizator3000", lifespan=lifespan)
 
-# Install order: app-factory platform assets, then host /static (domain CSS only).
-_platform = install_app_factory_ui(app, environments=(templates.env,))
+_passkey_service, _passkey_hooks, _auth_binding = build_passkey_components(
+    _auth_database_boot, _settings_boot
+)
+install_identity_adapters(
+    app,
+    environments=(templates.env,),
+    config=PLATFORM_CONFIG,
+    passkey=PasskeyBinding(
+        service=_passkey_service,
+        hooks=_passkey_hooks,
+        cookies=PasskeyCookies(
+            secure=_settings_boot.session_cookie_secure,
+            samesite="lax",
+        ),
+        csrf_token=session_csrf_token,
+        login_success_url="/",
+        register_success_url="/",
+        activation_success_url="/account",
+        recovery_success_url="/login",
+        locale_cookie_name=LOCALE_COOKIE_NAME,
+        supported_locales=SUPPORTED_LOCALES,
+        default_locale=DEFAULT_LOCALE,
+    ),
+    usermanager=UserManagerBinding(
+        hooks=AnonUserManagerHooks(_auth_binding),
+        csrf_protection=SessionCsrfProtection(session_key="csrf_token"),
+        environment=templates.env,
+    ),
+    current_user=_session_user,
+    locales=_locales,
+)
+app.state.auth_database_binding = _auth_binding
+# Host /static after platform mount so domain CSS does not swallow /static/platform.
 app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
-install_platform_chrome([templates.env])
-
-_passkey_ui, _auth_binding = install_passkey_routes(
-    app,
-    platform=_platform,
-    auth_database=_auth_database_boot,
-    settings=_settings_boot,
-)
-install_anon_usermanager_ui(
-    app,
-    platform=_platform,
-    environment=templates.env,
-    database=_auth_binding,
-)
 
 app.add_middleware(
     SessionMiddleware,

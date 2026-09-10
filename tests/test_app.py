@@ -303,6 +303,27 @@ class _FakeUploadRequest:
         yield b""
 
 
+def test_host_composes_identity_adapters_instead_of_installer_forks() -> None:
+    """Chrome + passkey + usermanager mount through the kit composer once."""
+    src_dir = Path(__file__).resolve().parents[1] / "src/anonimizator3000"
+    sources = {
+        path.name: path.read_text(encoding="utf-8")
+        for path in src_dir.glob("*.py")
+    }
+    joined = "\n".join(sources.values())
+
+    assert "install_identity_adapters(" in sources["main.py"]
+    assert "install_app_factory_ui(" not in sources["main.py"]
+    assert "install_platform_chrome(" not in joined
+    assert "install_passkey_ui(" not in joined
+    assert "install_usermanager_ui(" not in joined
+    assert "PasskeyUiConfig(" not in joined
+    assert "UserManagerUiConfig(" not in joined
+    assert "def render_login" not in joined
+    assert "def render_register" not in joined
+    assert "apply_platform_context(" not in joined
+
+
 def test_identity_lifecycle_paths_and_flags_match_bom() -> None:
     """Host chrome exposes the v0.6.22 identity-lifecycle path/flag matrix."""
     assert PLATFORM_PATHS.activation == "/activate"

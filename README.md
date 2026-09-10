@@ -162,7 +162,7 @@ Operator może jawnie wyłączyć GLiNER przez `ANON_GLINER_ENABLED=false`.
 
 ## Auth (passkeys + usermanager)
 
-Portal używa wspólnego stacku platformy: `my-auth` (passkeys WebAuthn) i `my-usermanager` (konta, role, `/account`, `/admin/users`).
+Portal używa wspólnego stacku platformy: `my-auth` (passkeys WebAuthn) i `my-usermanager` (konta, role, `/account`, `/admin/users`). Chrome, passkey i usermanager montuje `install_identity_adapters` raz; host zostawia persistence, first-user admin, invite/RBAC i menu produktu.
 
 ### Polityka rejestracji
 
