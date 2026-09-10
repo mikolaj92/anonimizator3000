@@ -7,6 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_FACTORY_TAG = "v0.6.22"
 MY_AUTH_TAG = "v0.5.4"
 MY_USERMANAGER_TAG = "v0.6.5"
+FASTAPI_MIN = "0.141.1"
+STARLETTE_MIN = "1.6.0"
+UVICORN_MIN = "0.52.4"
+HTTPX2_MIN = "2.12.0"
 
 
 def _pyproject() -> dict[str, object]:
@@ -91,6 +95,45 @@ def test_readme_documents_tag_and_rev_pins_instead_of_main() -> None:
     assert "fala-runtime" in readme
     assert "Docxtor" in readme and "v0.4.3" in readme
     assert "rev" in readme
+
+
+def _requirement_names(entries: list[object]) -> dict[str, str]:
+    named: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, str):
+            continue
+        name, _, spec = entry.partition(">=")
+        named[name.strip()] = spec.strip()
+    return named
+
+
+def test_manifest_pins_current_fastapi_httpx2_stack() -> None:
+    pyproject = _pyproject()
+    project = pyproject["project"]
+    runtime = _requirement_names(project["dependencies"])
+    extras = project["optional-dependencies"]
+    extra_dev = _requirement_names(extras["dev"])
+    group_dev = _requirement_names(pyproject["dependency-groups"]["dev"])
+
+    assert runtime["fastapi"] == FASTAPI_MIN
+    assert runtime["starlette"] == STARLETTE_MIN
+    assert runtime["uvicorn[standard]"] == UVICORN_MIN
+    assert extra_dev["httpx2"] == HTTPX2_MIN
+    assert group_dev["httpx2"] == HTTPX2_MIN
+    assert "httpx" not in extra_dev
+    assert "httpx" not in group_dev
+
+
+def test_uv_lock_resolves_current_fastapi_httpx2_stack() -> None:
+    packages = _lock_packages()
+
+    assert packages["fastapi"]["version"] == FASTAPI_MIN
+    assert packages["starlette"]["version"] == STARLETTE_MIN
+    assert packages["uvicorn"]["version"] == UVICORN_MIN
+    assert packages["httpx2"]["version"] == HTTPX2_MIN
+    assert packages["posejdon"]["source"]["git"].startswith(
+        "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5#"
+    )
 
 
 def test_docs_claim_current_compat_bom() -> None:
