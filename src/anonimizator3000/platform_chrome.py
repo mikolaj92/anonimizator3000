@@ -11,11 +11,8 @@ from app_factory.platform import (
     PlatformLocale,
     PlatformPaths,
     PlatformUser,
-    apply_platform_context,
     build_platform_context,
 )
-from jinja2 import Environment
-from my_auth.fastapi import PasskeyPaths
 from my_usermanager.permissions import ADMIN_ROLE_NAME
 from my_usermanager.sessions import SessionPrincipal
 
@@ -24,19 +21,7 @@ DEFAULT_LOCALE: Final = "pl"
 LOCALE_COOKIE_NAME: Final = "anon_lang"
 SUPPORTED_LOCALES: Final[tuple[str, ...]] = ("pl", "en", "de")
 
-PASSKEY_PATHS: Final = PasskeyPaths()
-PLATFORM_PATHS: Final = PlatformPaths(
-    login=PASSKEY_PATHS.login_page,
-    logout=PASSKEY_PATHS.logout,
-    register=PASSKEY_PATHS.register_page,
-    activation=PASSKEY_PATHS.activation_page,
-    recovery=PASSKEY_PATHS.recovery_page,
-    account="/account",
-    credentials=PASSKEY_PATHS.credentials_page,
-    admin_users="/admin/users",
-    # Packaged invite form lives on the users page; POST remains /admin/users/invite.
-    invite="/admin/users",
-)
+PLATFORM_PATHS: Final = PlatformPaths()
 
 _LOCALE_LABELS: Final = (("pl", "PL"), ("en", "EN"), ("de", "DE"))
 _LOCALES: Final = tuple(
@@ -93,24 +78,16 @@ def platform_config(
     )
 
 
-# Install-time globals (guest menu).
+# Install-time globals (guest menu). The composer binds this into Jinja.
 PLATFORM_CONFIG: Final = platform_config(user=None)
 
 
-def install_platform_chrome(environments: list[Environment]) -> PlatformConfig:
-    """Bind static platform globals into host Jinja environments."""
-    for environment in environments:
-        apply_platform_context(environment, PLATFORM_CONFIG)
-    return PLATFORM_CONFIG
-
-
-def platform_request_context(
+def platform_locales(
     *,
-    user: PlatformUser | None,
     current_path: str = "",
     locale: str | None = None,
-) -> dict[str, Any]:
-    """Build product shell context from the typed principal projection."""
+) -> tuple[tuple[PlatformLocale, ...], str]:
+    """Locale picker for the current path; unknown codes fall back to Polish."""
     resolved_locale = locale if locale in SUPPORTED_LOCALES else DEFAULT_LOCALE
     locale_path = current_path or "/"
     locales = tuple(
@@ -120,6 +97,19 @@ def platform_request_context(
             href=f"{locale_path}?lang={code}",
         )
         for code, label in _LOCALE_LABELS
+    )
+    return locales, resolved_locale
+
+
+def platform_request_context(
+    *,
+    user: PlatformUser | None,
+    current_path: str = "",
+    locale: str | None = None,
+) -> dict[str, Any]:
+    """Build product shell context from the typed principal projection."""
+    locales, resolved_locale = platform_locales(
+        current_path=current_path, locale=locale
     )
     return {
         **build_platform_context(
@@ -131,25 +121,3 @@ def platform_request_context(
         ),
         "lang": resolved_locale,
     }
-
-
-def login_platform_config() -> PlatformConfig:
-    """Chrome for packaged my-auth login/register pages."""
-    return PlatformConfig(
-        app_name=APP_NAME,
-        brand_href="/",
-        brand_htmx=False,
-        paths=PLATFORM_PATHS,
-        enable_account=False,
-        enable_credentials=False,
-        enable_admin_users=False,
-        enable_invite=False,
-        show_register=True,
-        locales=(
-            PlatformLocale(code="pl", label="PL", href="/login?lang=pl"),
-            PlatformLocale(code="en", label="EN", href="/login?lang=en"),
-            PlatformLocale(code="de", label="DE", href="/login?lang=de"),
-        ),
-        default_locale=DEFAULT_LOCALE,
-        htmx_nav=False,
-    )
