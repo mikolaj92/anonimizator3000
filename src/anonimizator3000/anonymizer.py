@@ -6,6 +6,7 @@ from threading import local
 from typing import Any, Protocol
 
 from posejdon import TextAnonymizer
+from posejdon.detectors.presidio_detector import PresidioDetector
 
 from anonimizator3000.config import Settings
 
@@ -78,6 +79,11 @@ def create_anonymizer(settings: Settings) -> SegmentAnonymizer:
         options["gliner_model"] = settings.gliner_model
     anonymizer = TextAnonymizer(**options)
     detectors = {type(detector).__name__: detector for detector in anonymizer.detectors}
+    # Pinned Posejdon TextAnonymizer (v0.1.2+) is regex + optional GLiNER.
+    # PresidioDetector still exists in the package; the host contract requires it.
+    if "PresidioDetector" not in detectors:
+        anonymizer.detectors.append(PresidioDetector())
+        detectors = {type(detector).__name__: detector for detector in anonymizer.detectors}
     required = {"RegexDetector", "PresidioDetector"}
     if settings.gliner_enabled:
         required.add("GLiNERDetector")

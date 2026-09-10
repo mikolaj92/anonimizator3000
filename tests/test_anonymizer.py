@@ -68,11 +68,40 @@ def test_create_anonymizer_rejects_silently_missing_enabled_gliner(monkeypatch) 
 
 
 def test_create_anonymizer_rejects_silently_missing_presidio(monkeypatch) -> None:
+    class UnavailablePresidioDetector:
+        available = False
+
+        def __init__(self) -> None:
+            self._engine = None
+
+    UnavailablePresidioDetector.__name__ = "PresidioDetector"
     _StubTextAnonymizer.detectors = [RegexDetector()]
     monkeypatch.setattr(anonymizer_module, "TextAnonymizer", _StubTextAnonymizer)
+    monkeypatch.setattr(
+        anonymizer_module,
+        "PresidioDetector",
+        UnavailablePresidioDetector,
+        raising=False,
+    )
 
     with pytest.raises(RuntimeError, match="PresidioDetector"):
         create_anonymizer(Settings(gliner_enabled=False))
+
+
+def test_create_anonymizer_mounts_presidio_when_posejdon_omits_it(monkeypatch) -> None:
+    """Pinned Posejdon TextAnonymizer is regex + optional GLiNER; host still requires Presidio."""
+    _StubTextAnonymizer.detectors = [RegexDetector()]
+    monkeypatch.setattr(anonymizer_module, "TextAnonymizer", _StubTextAnonymizer)
+    monkeypatch.setattr(
+        anonymizer_module, "PresidioDetector", PresidioDetector, raising=False
+    )
+
+    instance = create_anonymizer(Settings(gliner_enabled=False))
+
+    assert [detector.name for detector in instance._anonymizer.detectors] == [
+        "RegexDetector",
+        "PresidioDetector",
+    ]
 
 
 @pytest.mark.parametrize("name", ["PresidioDetector", "GLiNERDetector"])

@@ -107,7 +107,7 @@ PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych strona
 
 Warstwy są w `Posejdon`:
 
-1. Presidio jako pipeline wykrywania i anonimizacji.
+1. Presidio jako pipeline wykrywania i anonimizacji. Przypięty `TextAnonymizer` (`v0.1.5`) montuje regex i opcjonalny GLiNER; host sam dokłada `PresidioDetector` z pakietu, bo kontrakt portalu nadal go wymaga. Brak działającego backendu Presidio zatrzymuje start.
 2. Opcjonalny GLiNER dla `PERSON`, `ORG`, `LOC`, adresów, szpitali, urzędów, spraw i umów.
 3. Regex + walidacja dla identyfikatorów i numerów.
 
@@ -142,7 +142,7 @@ Operator może jawnie wyłączyć GLiNER przez `ANON_GLINER_ENABLED=false`.
 
 | Ścieżka | Wynik audytu / zabezpieczenie |
 | --- | --- |
-| Inicjalizacja detektorów Posejdon | Posejdon pomija błędy Presidio i GLiNER; `create_anonymizer` wymaga całego skonfigurowanego stosu i przerywa start przy braku detektora lub backendu. |
+| Inicjalizacja detektorów Posejdon | Przypięty `TextAnonymizer` nie montuje Presidio; host dokłada `PresidioDetector` i przerywa start, gdy detektor albo backend nie są dostępne. GLiNER nadal jest wymagany tylko gdy włączony. |
 | Wywołania backendów Presidio i GLiNER | Detektory Posejdon zamieniają wyjątek backendu na pusty wynik; monitor w `anonymizer.py` wykrywa ten przypadek i przerywa zadanie. |
 | Wybór/fallback modelu GLiNER | Aplikacja przekazuje wyłącznie skonfigurowany model i sprawdza jego dostępność; nie wybiera modelu zastępczego. |
 | Klient LLM i reviewer | Aplikacja ich nie tworzy, a kompatybilny `TextAnonymizer` Posejdona ma review LLM wyłączone; brak ścieżki do naprawy w tym repozytorium. |
