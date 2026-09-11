@@ -60,6 +60,16 @@ surface.
 - Posejdon
 - Fala
 
+### Klient HTTP
+
+Własny kod, testy i instrukcje używają bezpośrednio `import httpx2` oraz typów
+i wyjątków `httpx2.*`. Nie dodajemy aliasów `as httpx`, shimów `sys.modules`
+ani fallbacku importu do legacy `httpx` / `requests` / `aiohttp`.
+`fastapi.testclient.TestClient` pozostaje publicznym klientem testowym i nie
+wymaga przywracania starego klienta. Extra `dev` instaluje HTTPX2, nie `httpx`.
+Regresje łapie `tests/test_http_client_contract.py`. Legacy `httpx` może zostać
+**tranzytywnie** w locku przez biblioteki zewnętrzne; to nie jest przywracanie
+klienta we własnym kodzie (osobny ticket na źródła pośrednie).
 
 ### Migracja bazy tożsamości
 
@@ -219,9 +229,12 @@ Domyślne limity można zmienić przez zmienne środowiskowe:
 ## Testy
 
 ```bash
-uv run pytest
-uv run ruff check .
+uv run --extra dev pytest
+uv run --extra dev ruff check .
 ```
+
+`uv run --extra dev pytest tests/test_http_client_contract.py` pilnuje, żeby
+kod, testy i manifest nie wróciły do legacy klienta HTTP.
 
 ## Prywatność
 
