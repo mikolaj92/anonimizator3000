@@ -141,7 +141,11 @@ def test_docs_claim_current_compat_bom() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
     assert "current platform BOM from app-factory COMPAT.md" in pyproject
-    assert APP_FACTORY_TAG in pyproject and MY_AUTH_TAG in pyproject and MY_USERMANAGER_TAG in pyproject
+    assert (
+        APP_FACTORY_TAG in pyproject
+        and MY_AUTH_TAG in pyproject
+        and MY_USERMANAGER_TAG in pyproject
+    )
     assert "COMPAT.md" in readme
     assert "aktualny BOM" in readme
     assert APP_FACTORY_TAG in readme and MY_AUTH_TAG in readme and MY_USERMANAGER_TAG in readme
