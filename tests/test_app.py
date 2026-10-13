@@ -274,13 +274,52 @@ def test_htmx_config_swaps_client_error_fragments() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invalid_content_length_returns_upload_error() -> None:
-    request = _FakeUploadRequest(content_length="not-a-number")
+@pytest.mark.parametrize(
+    ("content_length", "status_code"),
+    [
+        ("not-a-number", 400),
+        ("", 400),
+        ("+200", 400),
+        ("-1", 400),
+        (" 200", 400),
+        ("200 ", 400),
+        ("2_00", 400),
+        ("２００", 400),
+        ("٢٠٠", 400),
+        ("201", 413),
+        ("000201", 413),
+        ("9" * 5000, 413),
+        ("200", None),
+        ("000200", None),
+        ("0" * 5000 + "200", None),
+        (None, None),
+    ],
+)
+async def test_invalid_content_length_returns_upload_error(
+    content_length: str | None, status_code: int | None
+) -> None:
+    request = _FakeUploadRequest(content_length=content_length)
 
-    with pytest.raises(UploadError, match="Content-Length") as error:
-        await read_multipart_document(request, max_file_bytes=100, max_body_bytes=200)
+    if status_code is not None:
+        message = (
+            "Nieprawidłowy nagłówek Content-Length."
+            if status_code == 400
+            else "Upload jest za duży."
+        )
+        with pytest.raises(UploadError) as error:
+            await read_multipart_document(request, max_file_bytes=100, max_body_bytes=200)
 
-    assert error.value.status_code == 400
+        assert error.value.status_code == status_code
+        assert str(error.value) == message
+        assert request.stream_reads == 0
+    else:
+        document = await read_multipart_document(
+            request, max_file_bytes=100, max_body_bytes=200
+        )
+        assert document.filename == "test.txt"
+        assert document.content_type == "text/plain"
+        assert document.data == b"hello"
+        assert request.stream_reads == 1
 
 
 def test_attachment_header_uses_encoded_filename() -> None:
@@ -293,14 +332,19 @@ def test_attachment_header_uses_encoded_filename() -> None:
 
 
 class _FakeUploadRequest:
-    def __init__(self, *, content_length: str) -> None:
-        self.headers = {
-            "content-type": "multipart/form-data; boundary=x",
-            "content-length": content_length,
-        }
+    def __init__(self, *, content_length: str | None) -> None:
+        self.headers = {"content-type": "multipart/form-data; boundary=x"}
+        if content_length is not None:
+            self.headers["content-length"] = content_length
+        self.stream_reads = 0
 
     async def stream(self):
-        yield b""
+        self.stream_reads += 1
+        body = (
+            b'--x\r\nContent-Disposition: form-data; name="document"; filename="test.txt"\r\n'
+            b"Content-Type: text/plain\r\n\r\nhello\r\n--x--\r\n"
+        )
+        yield body.ljust(200, b" ")
 
 
 def test_host_composes_identity_adapters_instead_of_installer_forks() -> None:

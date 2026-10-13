@@ -28,13 +28,16 @@ async def read_multipart_document(
 
     content_length = request.headers.get("content-length")
     if content_length is not None:
-        try:
-            content_length_value = int(content_length)
-        except ValueError as error:
-            raise UploadError("Nieprawidłowy nagłówek Content-Length.") from error
-        if content_length_value < 0:
+        # HTTP Content-Length allows ASCII digits only, unlike Python's int().
+        if not content_length.isascii() or not content_length.isdecimal():
             raise UploadError("Nieprawidłowy nagłówek Content-Length.")
-        if content_length_value > max_body_bytes:
+        # Compare decimal strings to avoid int()'s digit limit. Leading zeros
+        # are valid, and arbitrarily large lengths must still return 413.
+        normalized_length = content_length.lstrip("0") or "0"
+        body_limit = str(max_body_bytes)
+        if len(normalized_length) > len(body_limit) or (
+            len(normalized_length) == len(body_limit) and normalized_length > body_limit
+        ):
             raise UploadError("Upload jest za duży.", status_code=413)
 
     body = await _read_limited_body(request, max_body_bytes)
