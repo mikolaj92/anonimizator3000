@@ -66,10 +66,103 @@ Własny kod, testy i instrukcje używają bezpośrednio `import httpx2` oraz typ
 i wyjątków `httpx2.*`. Nie dodajemy aliasów `as httpx`, shimów `sys.modules`
 ani fallbacku importu do legacy `httpx` / `requests` / `aiohttp`.
 `fastapi.testclient.TestClient` pozostaje publicznym klientem testowym i nie
-wymaga przywracania starego klienta. Extra `dev` instaluje HTTPX2, nie `httpx`.
+wymaga przywracania starego klienta. Extra `dev` deklaruje HTTPX2 bezpośrednio,
+ale instaluje także pośredni `httpx`.
 Regresje łapie `tests/test_http_client_contract.py`. Legacy `httpx` może zostać
 **tranzytywnie** w locku przez biblioteki zewnętrzne; to nie jest przywracanie
-klienta we własnym kodzie (osobny ticket na źródła pośrednie).
+klienta we własnym kodzie. Rzeczywiste ścieżki opisuje audyt poniżej.
+
+### Audyt zależności pośrednich
+
+SHA wejściowy audytu: `2e38b0b3634f92acaf06359bc80a91eb1cf27c14`, gałąź
+`lokay/59`. Checkout był czysty. Liczniki: **134 pakiety w lockfile,
+5 sprawdzonych pakietów starszego stosu, 5 pozostających, 0 usuniętych**.
+„Starszy stos” oznacza tu klientów HTTP i warstwę zgodności spaCy, nie ocenę
+bezpieczeństwa ani wieku wszystkich 134 pakietów. `aiohttp` nie występuje.
+
+`A` oznacza aplikację. Wszystkie wersje w ścieżkach pochodzą z `uv.lock`:
+Posejdon `0.1.1` (tag `v0.1.5`), Presidio `2.2.364`, spaCy `3.8.15`,
+Weasel `1.0.0`, GLiNER `0.2.27`, Transformers `5.6.2`, tokenizers `0.22.2`,
+huggingface-hub `1.22.0`, tldextract `5.3.2`, requests-file `3.0.1`.
+
+| Pakiet i wersja | Źródło | Pełne ścieżki nadrzędne | Aktywne warianty | Decyzja | Następny krok i warunek zakończenia |
+| --- | --- | --- | --- | --- | --- |
+| `httpx 0.28.1` | [PyPI](https://pypi.org/pypi/httpx/0.28.1/json) | A → Posejdon → httpx; A → Presidio → spaCy → Weasel → httpx; A → Posejdon[detectors] → GLiNER → huggingface-hub → httpx; A → Posejdon[detectors] → GLiNER → Transformers → huggingface-hub → httpx; A → Posejdon[detectors] → GLiNER → Transformers → tokenizers → huggingface-hub → httpx | Pierwsze dwie: wszystkie. Ostatnie trzy: extra dev i detectors. | KEEP; usunąć bezpośrednią krawędź Posejdona, nie deklarować usunięcia pakietu. | Właściciele: mikolaj92/Posejdon, Explosion/Weasel, Hugging Face/huggingface-hub. Zweryfikowany kandydat Posejdon v0.2.3; pozostałe migracje wymagają wydań rodziców bez HTTPX. Bramka: regeneracja locka, cały pytest i ruff; brak każdej krawędzi w ponownym audycie. |
+| `httpcore 1.0.9` | [PyPI](https://pypi.org/pypi/httpcore/1.0.9/json) | Każda powyższa ścieżka HTTPX → httpcore | Wszystkie; ścieżki Hugging Face tylko z extra dev/detectors. | KEEP; nie zastępować przez override nazwą HTTPX2. | Właściciel: Encode/HTTPX. Usunąć po migracji wszystkich trzech rodziców HTTPX. Bramka: brak httpx i httpcore w aktywnych eksportach oraz zielony transport, błędy backendów i pełny suite. |
+| `requests 2.34.2` | [PyPI](https://pypi.org/pypi/requests/2.34.2/json) | A → Presidio → spaCy → requests; A → Presidio → tldextract → requests; A → Presidio → tldextract → requests-file → requests | Wszystkie | KEEP; zachować Presidio i jego detekcję. | Właściciele rodziców: Explosion/spaCy, john-kurkowski/tldextract, dashea/requests-file; klient: PSF/Requests. Migrować spaCy i tldextract razem do wydań bez Requests, także adaptera requests-file. Bramka: brak trzech krawędzi, poprawne rozpoznawanie domen, Presidio i dokumenty wynikowe w pełnym suite. |
+| `urllib3 2.7.0` | [PyPI](https://pypi.org/pypi/urllib3/2.7.0/json) | Każda powyższa ścieżka Requests → urllib3 | Wszystkie | KEEP; obecne 2.x nie oznacza starego pinu 1.x. | Właściciel: urllib3; rodzic: PSF/Requests. Usunąć dopiero po migracji wszystkich ścieżek Requests. Bramka: brak urllib3 w aktywnych eksportach i pełny suite, bez zmiany transportu na niezgodny pakiet. |
+| `spacy-legacy 3.0.12` | [PyPI](https://pypi.org/pypi/spacy-legacy/3.0.12/json) | A → Presidio → spaCy → spacy-legacy | Wszystkie | KEEP; biblioteka zgodności modelu, nie klient HTTP. | Właściciel: Explosion/spaCy. Aktualizować spaCy wraz z kompatybilnym en-core-web-lg dopiero gdy rodzic nie wymaga spacy-legacy. Bramka: ładowanie modelu, Presidio, detekcja PII i pełny suite dokumentów; brak krawędzi. |
+
+Nie potwierdzono wydań eliminujących krawędzie Weasel, Hugging Face, spaCy
+ani tldextract. Nie przypisujemy im wymyślonych tagów ani terminów.
+Fala pozostaje na dotychczasowej rewizji i nie jest rodzicem tych pakietów.
+
+Metadane przypiętych, zainstalowanych dystrybucji (`Requires-Dist`) potwierdzają:
+Posejdon `httpx>=0.28.1`; Weasel `httpx>=0.24.0`;
+huggingface-hub `httpx>=0.23.0,<1`; HTTPX `httpcore==1.*`;
+spaCy `requests>=2.13.0,<3` i `spacy-legacy>=3.0.11,<3.1.0`;
+tldextract `requests>=2.1.0`, `requests-file>=1.4`;
+requests-file `requests>=1.0.0`; Requests `urllib3>=1.26,<3`.
+Te krawędzie nie mają markerów platformy. GLiNER aktywuje wyłącznie extra
+`posejdon[detectors]`; ten extra włącza zarówno extra aplikacji `dev`, jak
+`detectors`, ale nie grupa `dev`. Opcjonalne zależności testowe Hugging Face
+nie są aktywne. Marker architektury `hf-xet` nie zmienia ścieżek HTTPX.
+Model `en-core-web-lg 3.8.0` w tym przypiętym wheelu nie deklaruje spaCy;
+ścieżka do spaCy prowadzi przez Presidio, nie przez ten model.
+
+Zweryfikowano zdalne tagi Posejdona bez odczytu tokenów: `v0.1.5` rozwiązuje
+się do `714301d3e55cd5459b1c7a06b25aa37cedb8583a`, zgodnie z lockfile.
+Kandydat `v0.2.3` wskazuje `6aefba61679d5dc5028c7a48eaf741acede4db00`.
+Jego manifest usuwa bezpośredni HTTPX i zachowuje opcjonalny GLiNER;
+źródła zachowują `TextAnonymizer` oraz `PresidioDetector`.
+Próba `uv lock` dla tego taga przekroczyła limit czasu podczas aktualizacji
+źródeł Git. To **blokada aktualizacji**, nie dowód niezgodności ani sukces.
+Zachowano produkcyjny pin v0.1.5 i niezmieniony lockfile.
+
+#### Odtworzenie i bramki
+
+Audyt wykonano na macOS arm64, Python 3.13.3, uv 0.11.20.
+Ta wersja `uv tree` nie obsługuje `--extra`; użyto `uv export --locked`.
+Eksport jest uniwersalny: markery trzeba stosować do środowiska docelowego.
+Liczniki poniżej liczą wpisy registry/wheel `nazwa==wersja`, nie źródła Git
+ani projekt editable; nie są liczbą zainstalowanych pakietów na każdej platformie.
+
+| Wariant | Polecenie eksportu | Wpisy registry/wheel | Starszy stos |
+| --- | --- | ---: | --- |
+| Podstawowy | `uv export --locked --no-dev --no-hashes` | 82 | 5/5; bez huggingface-hub i HTTPX2 |
+| Grupa dev (domyślna) | `uv export --locked --group dev --no-hashes` | 91 | 5/5; HTTPX2 obok HTTPX |
+| Extra dev + domyślna grupa dev | `uv export --locked --extra dev --no-hashes` | 126 | 5/5; także ścieżki Hugging Face |
+| Extra detectors + domyślna grupa dev | `uv export --locked --extra detectors --no-hashes` | 125 | 5/5; także ścieżki Hugging Face |
+
+`uv tree --locked`, `--no-dev`, `--group dev` i odwrócone drzewa
+`--invert --package httpx/requests/urllib3/spacy-legacy --universal`
+potwierdziły rodziców. Poniższe polecenie czyta bieżący lockfile i zwraca
+JSON wszystkich ścieżek, także alternatywnych wejść przez dodatki i grupy.
+Zachowuje markery i nie udaje instalacji opcjonalnych zależności:
+
+```bash
+uv run --locked python -m anonimizator3000.dependency_audit
+```
+
+Przed zmianą: `uv lock --check` OK, `uv run --locked pytest` **91 passed**,
+`uv run --locked ruff check .` OK. Instalacje `uv sync --locked --group dev`,
+`--extra dev` oraz `--extra detectors` przeszły dla zachowanego pinu;
+prywatny Posejdon był dostępny. Po przełączeniu z extra dev na detectors
+pełny pytest dał **90 passed, 1 failed**: Posejdon wymaga obecności `pip`
+przy inicjalizacji Presidio, a pip jest tylko w extra dev. To znany podczas
+audytu problem wariantu podstawowego/detectors, nie sukces runtime.
+Najmniejsza następna naprawa: przenieść `pip>=25.0` do zależności podstawowych
+lub usunąć bramkę pip w Posejdonie; wymaga regeneracji locka, która tutaj
+pozostała zablokowana aktualizacją źródeł Git. Nie osłabiono detektora.
+Po końcowym `uv sync --locked --extra dev`: kontrola locka OK,
+testy pinów **7 passed**, pełny pytest **91 passed**, ruff OK.
+Testy pinów pozostają bez zmian,
+ponieważ wybrane piny się nie zmieniły. Nie dodano testów jednostkowych.
+
+Checkout nie zawiera `.github/workflows` ani innego śledzonego pliku CI.
+Publiczne API GitHub zwróciło 0 check runs dla wejściowego SHA;
+odczyt ochrony gałęzi zwrócił HTTP 401. **Wymagane kontrole PR i CI końcowego
+SHA pozostają niezweryfikowane.** Wynik lokalny nie zastępuje CI.
 
 ### Migracja bazy tożsamości
 
