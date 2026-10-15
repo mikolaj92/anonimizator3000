@@ -1,0 +1,91 @@
+{
+  "kind": "informational_inspection_report",
+  "operational_receipt": false,
+  "resume_signal": false,
+  "repository": "mikolaj92/anonimizator3000",
+  "issue": 60,
+  "parent_issue": 54,
+  "inspection": {
+    "sha": "6b16c05afccc066133849a1944f5793f1e304afb",
+    "branch": "lokay/60",
+    "scope": "current checkout only; no conclusions about external implementations",
+    "checked_paths": [
+      ".lokay",
+      ".github",
+      "src",
+      "tests",
+      "README.md",
+      "pyproject.toml",
+      "uv.lock"
+    ],
+    "sources": [
+      {
+        "command": "git rev-parse HEAD; git branch --show-current; git status --short",
+        "result": "Inspection SHA and branch confirmed; initial working tree clean."
+      },
+      {
+        "command": "git ls-files; git ls-files .github .lokay",
+        "result": "No tracked .github workflow or operational receipt; .lokay contains approach.md and localize.json."
+      },
+      {
+        "command": "rg -n --hidden -g '!.git/**' -g '!.venv/**' -g '!.uv-cache/**' 'auto.unpark|host.ops|needs_human|Hermes|limbo|replay' .",
+        "result": "No matches; an operational contract or replay interface was not established in this checkout."
+      },
+      {
+        "path": ".lokay/localize.json",
+        "result": "References issue 45; does not establish the operational contract for issue 60."
+      }
+    ]
+  },
+  "host_evidence": {
+    "status": "unverified",
+    "receipt": null,
+    "host": null,
+    "operation_time": null,
+    "execution_id": null,
+    "mechanism_sha": null
+  },
+  "hermes": {
+    "status": "unverified",
+    "restored": null,
+    "resume_confirmed": null
+  },
+  "parent": {
+    "status": "unverified",
+    "factory_skipped": null,
+    "limbo_count": null,
+    "needs_human_count": null,
+    "resume_count": null
+  },
+  "operational_gate": {
+    "status": "unverified",
+    "replay_result": null,
+    "blockers": [
+      "receipt_contract_unconfirmed",
+      "operational_owner_unconfirmed",
+      "authorized_execution_environment_unconfirmed",
+      "replay_interface_unconfirmed",
+      "host_receipt_not_verified",
+      "hermes_restoration_not_verified",
+      "parent_skip_labels_and_counters_not_measured",
+      "valid_invalid_foreign_stale_duplicate_restart_and_hermes_scenarios_not_executed"
+    ]
+  },
+  "local_checks": {
+    "source": "Commands executed in this checkout with UV_CACHE_DIR set to its .uv-cache directory.",
+    "uv lock --check": {"status": "passed", "exit_code": 0},
+    "uv run --frozen ruff check .": {"status": "passed", "exit_code": 0},
+    "uv run --frozen pytest": {
+      "status": "passed",
+      "exit_code": 0,
+      "passed": 91,
+      "warnings": 15
+    }
+  },
+  "ci": {
+    "status": "unverified",
+    "required_checks": null,
+    "final_sha_result": null,
+    "blocker": "Remote PR rules and final SHA checks were not queried; local checks do not establish CI or operational acceptance."
+  }
+}
