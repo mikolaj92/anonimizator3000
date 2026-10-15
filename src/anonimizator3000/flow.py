@@ -1,11 +1,3 @@
-"""The Carrier flow that wires the anonymization blocks into a dependency graph.
-
-convert -> load -> anonymize -> serialize -> redact_authors, each a
-``python_function`` step resolved by ``module:function`` reference. Fala owns the
-ordering, retries, and status; the blocks in :mod:`anonimizator3000.steps` own the
-work.
-"""
-
 from __future__ import annotations
 
 from fala.models import CarrierAdapterSpec, CarrierFlowSpec, CarrierFlowStepSpec
