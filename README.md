@@ -314,6 +314,9 @@ Domyślne limity można zmienić przez zmienne środowiskowe:
 | `ANON_GLINER_ENABLED` | `true` | Włącza GLiNER; `false` jest jawną zgodą na słabszy stos |
 | `ANON_GLINER_MODEL` | `urchade/gliner_multi_pii-v1` | Model GLiNER; nie może być pusty, gdy GLiNER jest włączony |
 | `ANON_GLINER_THRESHOLD` | `0.45` | Próg predykcji GLiNER |
+| `ANON_REPLACEMENT_STYLE` | `mask` | Styl anonimizacji: `mask` daje `****`, a `labels` etykiety, np. `[OSOBA_1]` |
+
+UI nie pokazuje selektora stylu. Pole multipart `style` w `POST /jobs` przyjmuje `mask` lub `labels` i nadpisuje ustawienie środowiskowe dla danego zadania. Brak pola lub niepoprawna wartość oznacza użycie ustawienia środowiskowego.
 
 `ANON_TRUST_PROXY_HEADERS=true` włączaj tylko za reverse proxy, który czyści i ustawia `X-Forwarded-For`.
 
