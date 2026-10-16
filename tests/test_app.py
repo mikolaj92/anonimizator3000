@@ -1,7 +1,10 @@
 import base64
 import html
 import json
+import os
 import re
+import subprocess
+import sys
 import time
 from datetime import date
 from io import BytesIO
@@ -383,8 +386,7 @@ def test_identity_lifecycle_paths_and_flags_match_bom() -> None:
     assert config.enable_invite is True
 
 
-def test_platform_auth_routes_exist() -> None:
-    """Package-owned auth/account/admin surfaces are reachable anonymously."""
+def test_platform_auth_routes_exist(tmp_path: Path) -> None:
     with TestClient(app) as client:
         login = client.get("/login")
         register = client.get("/register")
@@ -407,6 +409,38 @@ def test_platform_auth_routes_exist() -> None:
     assert admin_users.status_code == 303
     assert invite.status_code in {303, 401, 403}
     assert logout.status_code == 303
+
+    result = subprocess.run(
+        [sys.executable, "-c", """
+from http.cookies import SimpleCookie
+from fastapi.testclient import TestClient
+from my_auth.fastapi import PasskeyCookies
+from anonimizator3000.main import app, _settings_boot
+
+client = TestClient(app)
+login = client.get('/login')
+assert login.status_code == 200
+session = SimpleCookie()
+for header in login.headers.get_list('set-cookie'):
+    session.load(header)
+assert session[_settings_boot.session_cookie_name]['samesite'].lower() == 'strict'
+options = client.post('/api/auth/login/options')
+assert options.status_code == 200
+challenge = SimpleCookie()
+for header in options.headers.get_list('set-cookie'):
+    challenge.load(header)
+assert challenge[PasskeyCookies().authentication_challenge]['samesite'].lower() == 'lax'
+"""],
+        env={
+            **os.environ,
+            "ANON_SESSION_COOKIE_SAMESITE": "strict",
+            "ANON_AUTH_DB": str(tmp_path / "auth.sqlite3"),
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_legacy_untyped_session_does_not_authenticate_existing_user(
