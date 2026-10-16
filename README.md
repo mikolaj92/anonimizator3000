@@ -2,7 +2,7 @@
 
 Publiczny portal do lokalnej anonimizacji dokumentów.
 
-Upload dokumentów trafia wyłącznie do pamięci procesu. Aplikacja nie zapisuje oryginalnych dokumentów na dysku. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania. Wynik anonimizacji jest trzymany krótko w pamięci, żeby użytkownik mógł go pobrać.
+Bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`. Fala zapisuje metadane workflow w tymczasowym pliku SQLite `run.sqlite` na dysku. Plik leży w katalogu `anon-run-*` w systemowym katalogu tymczasowym. Katalog jest sprzątany przy normalnym wyjściu z przetwarzania; po awarii usunięcie nie jest gwarantowane. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania. Wynik anonimizacji jest trzymany krótko w pamięci, żeby użytkownik mógł go pobrać.
 
 Osobno od dokumentów działa trwała baza SQLite platformy auth (passkey / konta użytkowników) — patrz sekcja Auth i zmienna `ANON_AUTH_DB`.
 
@@ -35,10 +35,14 @@ uruchamia graf `DOCUMENT_FLOW`. Każdy węzeł jest osobnym adapterem
 | `serialize` | dokument i zanonimizowane segmenty | nazwa, MIME i bajty wyniku w formacie wejściowym | metadane pliku i rozmiar |
 | `redact_authors` | bajty wyniku | bajty bez tożsamości autorów | liczba zanonimizowanych autorów |
 
-Ciężkie lub wrażliwe dane pozostają tylko w pamięci procesu i są usuwane po
-runie; przez magazyn Fala przechodzą wyłącznie małe metadane JSON. Kontrakty
-adapterów są typowane w `steps.py`. Nie znaleziono innych przepływów AI ani luk
-wymagających osobnych zadań.
+Bajty źródła, tekst dokumentu i bajty wyniku pozostają w pamięci procesu
+w `JobContext`; kontekst jest usuwany po zakończeniu zadania. Fala zapisuje
+metadane JSON w `run.sqlite` w katalogu `anon-run-*` w systemowym katalogu
+tymczasowym. Obejmują one m.in. nazwę pliku wynikowego i liczby wykryć;
+mały rozmiar nie oznacza braku danych wrażliwych. Katalog jest sprzątany przy
+normalnym wyjściu z przetwarzania, bez gwarancji usunięcia po awarii.
+Kontrakty adapterów są typowane w `steps.py`. Nie znaleziono innych przepływów
+AI ani luk wymagających osobnych zadań.
 
 ### Fala compatibility boundary
 
@@ -335,8 +339,9 @@ kod, testy i manifest nie wróciły do legacy klienta HTTP.
 
 ## Prywatność
 
-- brak zapisu **uploadów dokumentów** na dysku — oryginały i wyniki są tylko w pamięci procesu
-- workflow Fali działa na lokalnym store w pamięci procesu
+- bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`; wynik pozostaje w pamięci do pobrania lub wygaśnięcia
+- metadane workflow Fali, w tym nazwa pliku wynikowego i liczby wykryć, trafiają na dysk do `run.sqlite` w katalogu `anon-run-*` w systemowym katalogu tymczasowym; mogą zawierać dane wrażliwe
+- katalog workflow jest sprzątany przy normalnym wyjściu z przetwarzania; usunięcie po awarii nie jest gwarantowane
 - wynik anonimizacji wygasa po TTL (`ANON_JOB_TTL_SECONDS`)
 - **auth jest trwały**: konta, passkey credentials i role leżą w SQLite (`ANON_AUTH_DB`, domyślnie `storage/auth.sqlite3`) — to nie jest baza dokumentów
 - odrzucanie za dużych plików przed anonimizacją
