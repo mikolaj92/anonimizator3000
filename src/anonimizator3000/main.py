@@ -275,7 +275,7 @@ def _client_ip(request: Request, settings: Settings) -> str:
     if settings.trust_proxy_headers:
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.partition(",")[0].strip()
+            return forwarded.split(",", 1)[0].strip()
     if request.client and request.client.host:
         return request.client.host
     return "unknown"

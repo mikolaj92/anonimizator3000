@@ -9,6 +9,7 @@ import time
 from datetime import date
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import AsyncMock
 from zipfile import ZipFile
 
 import pytest
@@ -120,11 +121,23 @@ def test_index_does_not_show_removed_header_copy() -> None:
     assert "10 minut" in response.text
 
 
-def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
-    with TestClient(app) as client:
+@pytest.mark.parametrize(
+    ("trust_proxy_headers", "expected_ip"),
+    [("false", "192.0.2.42"), ("true", "198.51.100.23")],
+)
+def test_docx_upload_poll_and_download_flow_returns_docx(
+    monkeypatch, trust_proxy_headers: str, expected_ip: str
+) -> None:
+    monkeypatch.setenv("ANON_TRUST_PROXY_HEADERS", trust_proxy_headers)
+    with TestClient(app, client=("192.0.2.42", 50000)) as client:
+        submit = AsyncMock(wraps=app.state.queue.submit)
+        monkeypatch.setattr(app.state.queue, "submit", submit)
         response = client.post(
             "/jobs",
-            headers={"HX-Request": "true"},
+            headers={
+                "HX-Request": "true",
+                "X-Forwarded-For": " 198.51.100.23 , 203.0.113.9",
+            },
             files={
                 "document": (
                     "sample.docx",
@@ -135,6 +148,8 @@ def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
         )
 
         assert response.status_code == 200
+        submit.assert_awaited_once()
+        assert submit.await_args.kwargs["ip"] == expected_ip
         assert '<progress' in response.text
         assert 'class="app-progress w-full"' in response.text
         assert 'id="job-card"' in response.text
