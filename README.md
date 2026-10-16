@@ -181,12 +181,15 @@ dostępem do `mikolaj92/Posejdon`.
 git clone https://github.com/mikolaj92/anonimizator3000.git
 cd anonimizator3000
 uv sync
-uv run uvicorn anonimizator3000.main:app --reload
+uv run anonimizator3000
 ```
+
+Skrypt używa stałych ustawień: host `127.0.0.1`, port `8000` i włączone automatyczne przeładowanie.
+Skrypt `anonimizator3000` nie obsługuje flag `--host`, `--port` ani `--reload`; inne ustawienia wymagają bezpośredniego uruchomienia uvicorn.
 
 Potem otwórz `http://127.0.0.1:8000`.
 
-Żeby wystawić aplikację w LAN:
+Żeby wystawić aplikację w LAN, uruchom bezpośrednio uvicorn:
 
 ```bash
 uv run uvicorn anonimizator3000.main:app --host 0.0.0.0 --port 8000 --reload
