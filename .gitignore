@@ -13,3 +13,4 @@ storage/
 *.pyo
 *.pyd
 .DS_Store
+.lokay/
