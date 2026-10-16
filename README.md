@@ -194,7 +194,6 @@ uv run uvicorn anonimizator3000.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Obsługiwane wejście
 
-- tekstowe: `.txt`, `.md`, `.csv`, `.json`, `.xml`, `.html`, `.log`
 - `.pdf` przez `Docxtor`
 - `.docx` przez `Docxtor`
 
@@ -202,7 +201,6 @@ Wynik zachowuje typ wejścia:
 
 - PDF -> PDF
 - DOCX -> DOCX
-- tekst -> TXT
 
 PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych stronach, więc liczba stron i grafika dokumentu zostają zachowane, gdy zmienione fragmenty da się dopasować do tekstu strony. Jeśli fragmentu nie da się bezpiecznie odnaleźć, `Docxtor` zamyka ryzyko wycieku przez zastąpienie tekstu tej strony. DOCX jest modyfikowany w pamięci przez `Docxtor`; struktura akapitów i tabel zostaje, ale formatowanie w ramach jednego akapitu może się uprościć.
 
