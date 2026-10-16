@@ -210,7 +210,7 @@ def test_plain_form_upload_redirects_to_server_rendered_job_page() -> None:
     with TestClient(app) as client:
         response = client.post(
             "/jobs",
-            files={"document": ("sample.txt", b"hello", "text/plain")},
+            files={"document": ("sample.docx", _docx_bytes("hello"), DOCX_MIME)},
             follow_redirects=False,
         )
         assert response.status_code == 303
