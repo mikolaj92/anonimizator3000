@@ -185,7 +185,7 @@ uv run anonimizator3000
 ```
 
 Skrypt używa stałych ustawień: host `127.0.0.1`, port `8000` i włączone automatyczne przeładowanie.
-Nie obsługuje flag konfiguracji.
+Skrypt `anonimizator3000` nie obsługuje flag `--host`, `--port` ani `--reload`; inne ustawienia wymagają bezpośredniego uruchomienia uvicorn.
 
 Potem otwórz `http://127.0.0.1:8000`.
 
