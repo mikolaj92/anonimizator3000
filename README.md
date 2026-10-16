@@ -278,7 +278,7 @@ To celowa polityka produktu (lokalny / self-hosted portal), nie bug. Jeśli wdra
 | `ANON_SESSION_SECRET` | `dev-anon-session-secret-change-me` | Sekret podpisu cookie sesji (Starlette). **W produkcji ustaw własny, losowy sekret.** |
 | `ANON_SESSION_COOKIE` | `anon_session` | Nazwa cookie sesji |
 | `ANON_SESSION_COOKIE_SECURE` | `false` | `Secure` na cookie sesji i passkey cookies (`true` za HTTPS) |
-| `ANON_SESSION_COOKIE_SAMESITE` | `lax` | `SameSite` cookie sesji |
+| `ANON_SESSION_COOKIE_SAMESITE` | `lax` | `SameSite` wyłącznie cookie sesji; cookies passkey zawsze mają `SameSite=lax`, niezależnie od tej zmiennej |
 | `ANON_SESSION_MAX_AGE` | `1209600` (14 dni) | Max age sesji w sekundach |
 | `ANON_AUTH_DB` | `storage/auth.sqlite3` (w katalogu repo) | Ścieżka trwałej bazy SQLite auth (credentials, users, grants) |
 | `ANON_PASSKEY_RP_ID` | `localhost` | WebAuthn Relying Party ID (domena bez schematu) |
