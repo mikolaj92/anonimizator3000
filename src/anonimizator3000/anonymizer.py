@@ -6,9 +6,16 @@ from threading import local
 from typing import Any, Protocol
 
 from posejdon import TextAnonymizer
-from posejdon.detectors.presidio_detector import PresidioDetector
+from posejdon.detectors.presidio_detector import PresidioDetector as PosejdonPresidioDetector
+from presidio_analyzer import AnalyzerEngine
 
 from anonimizator3000.config import Settings
+
+
+class PresidioDetector(PosejdonPresidioDetector):
+    def __init__(self, language: str = "pl") -> None:
+        self.language = language
+        self._engine = AnalyzerEngine()
 
 
 class _DetectorFailure(BaseException):
