@@ -27,7 +27,7 @@ Portal obsługuje UI, upload, limity per IP, lokalnego workera i integrację pak
 
 ### Zgodność Fala
 
-`fala-runtime` pozostaje na rewizji `6dd634d18b4812faed04897426bc69322ef59c34`. Pipeline korzysta z CPython carrier API: `fala.models`, `fala.carrier_runtime.FalaRuntime` i `fala.runtime_backend`. Fala v0.7.x udostępnia inne API host/sdk i nie zastępuje tego runtime'u bez migracji.
+`fala-runtime` pozostaje na rewizji `6dd634d18b4812faed04897426bc69322ef59c34`. Pipeline korzysta z CPython carrier API: `fala.models`, `fala.carrier_runtime.FalaRuntime` i `fala.runtime_backend`.
 
 ### Klient HTTP
 
