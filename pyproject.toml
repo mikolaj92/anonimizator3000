@@ -68,6 +68,7 @@ posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", tag = "v0.2.3" }
 en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }
 
 [tool.uv]
+constraint-dependencies = ["charset-normalizer!=3.4.8"]
 # Nested adapter uv.sources pin older app-factory tags
 # (UM v0.6.5 sources app-factory@v0.6.22; my-auth v0.5.4 sources
 # app-factory@v0.6.22). Override app-factory only. Do not override
