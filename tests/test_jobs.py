@@ -63,7 +63,7 @@ async def _wait_for_done(queue: DocumentProcessingQueue, job_id: str):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["done", "failed"])
-async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing(
+async def test_queue_limits_active_jobs_drops_source_and_expires_finished_jobs_only_on_cleanup(
     monkeypatch: pytest.MonkeyPatch, status: str
 ) -> None:
     queue = _make_queue(_FakeAnonymizer(), max_active_jobs_per_ip=1)
@@ -133,7 +133,6 @@ async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_proc
     with monkeypatch.context() as clock_patch:
         for now in (259.0, 260.0, 261.0):
             clock_patch.setattr(jobs, "time", SimpleNamespace(monotonic=lambda now=now: now))
-            # A read alone does not expire a job, even after TTL.
             assert await queue.get(first.id) is not None
             for _ in range(2):
                 await queue._cleanup()
