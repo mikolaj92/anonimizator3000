@@ -119,6 +119,15 @@ class DocumentProcessingQueue:
         replacement_style: str = DEFAULT_REPLACEMENT_STYLE,
     ) -> JobSnapshot:
         now = time.monotonic()
+        job = _Job(
+            id=_new_job_id(),
+            ip=ip,
+            source_filename=filename,
+            source_content_type=content_type,
+            source_bytes=data,
+            replacement_style=replacement_style,
+        )
+
         async with self._lock:
             self._enforce_rate_limit(ip, now)
             if self._active_jobs_for_ip(ip) >= self._max_active_jobs_per_ip:
@@ -126,14 +135,6 @@ class DocumentProcessingQueue:
             if self._active_jobs() >= self._max_size:
                 raise QueueRejected("Kolejka jest pełna. Spróbuj później.", status_code=503)
 
-            job = _Job(
-                id=_new_job_id(),
-                ip=ip,
-                source_filename=filename,
-                source_content_type=content_type,
-                source_bytes=data,
-                replacement_style=replacement_style,
-            )
             self._jobs[job.id] = job
             self._submissions[ip].append(now)
             snapshot = self._snapshot(job)
