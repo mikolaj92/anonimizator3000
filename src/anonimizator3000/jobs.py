@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import time
 from collections import defaultdict, deque
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 from uuid import uuid4
@@ -67,7 +66,6 @@ class DocumentProcessingQueue:
         rate_limit_submissions: int,
         rate_limit_window_seconds: int,
         job_ttl_seconds: int,
-        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._anonymizer = anonymizer
         self._max_text_chars = max_text_chars
@@ -77,7 +75,6 @@ class DocumentProcessingQueue:
         self._rate_limit_submissions = rate_limit_submissions
         self._rate_limit_window_seconds = rate_limit_window_seconds
         self._job_ttl_seconds = job_ttl_seconds
-        self._clock = clock
         self._jobs: dict[str, _Job] = {}
         self._submissions: dict[str, deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
@@ -121,7 +118,7 @@ class DocumentProcessingQueue:
         data: bytes,
         replacement_style: str = DEFAULT_REPLACEMENT_STYLE,
     ) -> JobSnapshot:
-        now = self._clock()
+        now = time.monotonic()
         job = _Job(
             id=_new_job_id(),
             ip=ip,
@@ -129,8 +126,6 @@ class DocumentProcessingQueue:
             source_content_type=content_type,
             source_bytes=data,
             replacement_style=replacement_style,
-            created_at=now,
-            updated_at=now,
         )
 
         async with self._lock:
@@ -184,7 +179,7 @@ class DocumentProcessingQueue:
             if job is None or job.source_bytes is None or job.source_filename is None:
                 return
             job.status = "processing"
-            job.updated_at = self._clock()
+            job.updated_at = time.monotonic()
             filename = job.source_filename
             content_type = job.source_content_type
             data = job.source_bytes
@@ -209,7 +204,7 @@ class DocumentProcessingQueue:
                     job.error = str(error)
                     job.source_bytes = None
                     job.source_filename = None
-                    job.updated_at = self._clock()
+                    job.updated_at = time.monotonic()
             return
 
         async with self._lock:
@@ -222,7 +217,7 @@ class DocumentProcessingQueue:
                 job.source_bytes = None
                 job.source_filename = None
                 job.status = "done"
-                job.updated_at = self._clock()
+                job.updated_at = time.monotonic()
 
     async def _cleanup_loop(self) -> None:
         while not self._stopping.is_set():
@@ -230,7 +225,7 @@ class DocumentProcessingQueue:
             await self._cleanup()
 
     async def _cleanup(self) -> None:
-        now = self._clock()
+        now = time.monotonic()
         async with self._lock:
             expired = [
                 job_id
@@ -246,7 +241,7 @@ class DocumentProcessingQueue:
                     del self._submissions[ip]
 
     def _snapshot(self, job: _Job) -> JobSnapshot:
-        now = self._clock()
+        now = time.monotonic()
         return JobSnapshot(
             id=job.id,
             status=job.status,

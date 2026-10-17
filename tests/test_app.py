@@ -9,7 +9,9 @@ import time
 from datetime import date
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import AsyncMock
+from threading import Event
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 from zipfile import ZipFile
 
 import pytest
@@ -25,6 +27,7 @@ from my_usermanager.permissions import ADMIN_ROLE_NAME
 from my_usermanager.sessions import SessionPrincipal, write_session_principal
 from posejdon import TextAnonymizer
 
+import anonimizator3000.jobs as jobs_module
 import anonimizator3000.main as main_module
 from anonimizator3000.config import Settings
 from anonimizator3000.main import _attachment_header, _settings_boot, app
@@ -129,6 +132,12 @@ def test_docx_upload_poll_and_download_flow_returns_docx(
     monkeypatch, trust_proxy_headers: str, expected_ip: str
 ) -> None:
     monkeypatch.setenv("ANON_TRUST_PROXY_HEADERS", trust_proxy_headers)
+    monkeypatch.setenv("ANON_JOB_TTL_SECONDS", "60")
+    now = time.monotonic()
+    clock = Mock(return_value=now)
+    monkeypatch.setattr(
+        jobs_module, "time", SimpleNamespace(monotonic=clock, time_ns=time.time_ns)
+    )
     with TestClient(app, client=("192.0.2.42", 50000)) as client:
         submit = AsyncMock(wraps=app.state.queue.submit)
         monkeypatch.setattr(app.state.queue, "submit", submit)
@@ -178,6 +187,58 @@ def test_docx_upload_poll_and_download_flow_returns_docx(
         assert "Jan Kowalski" not in text
         assert "44051401359" not in text
         assert "jan@example.com" not in text
+
+        queue = app.state.queue
+        assert client.portal is not None
+        client.portal.call(queue._pending.join)
+        process_document = jobs_module.process_document
+        process = Mock(side_effect=ValueError("Invalid document"))
+        monkeypatch.setattr(jobs_module, "process_document", process)
+        failed = client.post(
+            "/jobs",
+            files={"document": ("failed.docx", _docx_bytes("hello"), DOCX_MIME)},
+            follow_redirects=False,
+        )
+        assert failed.status_code == 303
+        failed_id = failed.headers["location"].rsplit("/", 1)[1]
+        client.portal.call(queue._pending.join)
+        assert client.portal.call(queue.get, failed_id).status == "failed"
+
+        release = Event()
+        process.side_effect = lambda *args, **kwargs: (
+            release.wait() and process_document(*args, **kwargs)
+        )
+        try:
+            active_ids = []
+            for filename in ("processing.docx", "queued.docx"):
+                active = client.post(
+                    "/jobs",
+                    files={"document": (filename, _docx_bytes("hello"), DOCX_MIME)},
+                    follow_redirects=False,
+                )
+                assert active.status_code == 303
+                active_ids.append(active.headers["location"].rsplit("/", 1)[1])
+            assert client.portal.call(queue.get, active_ids[0]).status == "processing"
+            assert client.portal.call(queue.get, active_ids[1]).status == "queued"
+
+            for age in (59, 60, 61):
+                clock.return_value = now + age
+                client.portal.call(queue._cleanup)
+                for completed_id in (job_id, failed_id):
+                    status = client.get(f"/jobs/{completed_id}")
+                    result = client.get(f"/jobs/{completed_id}/download")
+                    assert status.status_code == (404 if age > 60 else 200)
+                    assert result.status_code == (
+                        200 if completed_id == job_id and age <= 60 else 404
+                    )
+                for active_id, expected_status in zip(
+                    active_ids, ("processing", "queued"), strict=True
+                ):
+                    assert client.get(f"/jobs/{active_id}").status_code == 200
+                    assert client.portal.call(queue.get, active_id).status == expected_status
+        finally:
+            release.set()
+            client.portal.call(queue._pending.join)
 
 
 def test_docx_download_keeps_root_namespace_declarations() -> None:
