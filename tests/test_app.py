@@ -1,11 +1,15 @@
 import base64
 import html
 import json
+import os
 import re
+import subprocess
+import sys
 import time
 from datetime import date
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import AsyncMock
 from zipfile import ZipFile
 
 import pytest
@@ -93,8 +97,11 @@ def test_index_does_not_show_removed_header_copy() -> None:
 
     assert response.status_code == 200
     assert 'aria-label="Informacje o prywatności"' in response.text
-    assert "Dokument nie jest zapisywany na dysku" in response.text
-    assert "wynik też wygasa" in response.text
+    assert "Bajty i tekst dokumentu są przetwarzane w RAM; wynik wygasa." in response.text
+    assert "Metadane workflow Fali" in response.text
+    assert "run.sqlite w katalogu anon-run-* w systemowym katalogu tymczasowym" in response.text
+    assert "Mogą zawierać dane wrażliwe." in response.text
+    assert "bez gwarancji usunięcia po awarii" in response.text
     assert "Lokalnie. Bez zapisu." not in response.text
     assert "Anonimizator3000" not in response.text
     assert "in-memory" not in response.text
@@ -114,11 +121,23 @@ def test_index_does_not_show_removed_header_copy() -> None:
     assert "10 minut" in response.text
 
 
-def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
-    with TestClient(app) as client:
+@pytest.mark.parametrize(
+    ("trust_proxy_headers", "expected_ip"),
+    [("false", "192.0.2.42"), ("true", "198.51.100.23")],
+)
+def test_docx_upload_poll_and_download_flow_returns_docx(
+    monkeypatch, trust_proxy_headers: str, expected_ip: str
+) -> None:
+    monkeypatch.setenv("ANON_TRUST_PROXY_HEADERS", trust_proxy_headers)
+    with TestClient(app, client=("192.0.2.42", 50000)) as client:
+        submit = AsyncMock(wraps=app.state.queue.submit)
+        monkeypatch.setattr(app.state.queue, "submit", submit)
         response = client.post(
             "/jobs",
-            headers={"HX-Request": "true"},
+            headers={
+                "HX-Request": "true",
+                "X-Forwarded-For": " 198.51.100.23 , 203.0.113.9",
+            },
             files={
                 "document": (
                     "sample.docx",
@@ -129,6 +148,8 @@ def test_docx_upload_poll_and_download_flow_returns_docx() -> None:
         )
 
         assert response.status_code == 200
+        submit.assert_awaited_once()
+        assert submit.await_args.kwargs["ip"] == expected_ip
         assert '<progress' in response.text
         assert 'class="app-progress w-full"' in response.text
         assert 'id="job-card"' in response.text
@@ -210,7 +231,7 @@ def test_plain_form_upload_redirects_to_server_rendered_job_page() -> None:
     with TestClient(app) as client:
         response = client.post(
             "/jobs",
-            files={"document": ("sample.txt", b"hello", "text/plain")},
+            files={"document": ("sample.docx", _docx_bytes("hello"), DOCX_MIME)},
             follow_redirects=False,
         )
         assert response.status_code == 303
@@ -383,8 +404,7 @@ def test_identity_lifecycle_paths_and_flags_match_bom() -> None:
     assert config.enable_invite is True
 
 
-def test_platform_auth_routes_exist() -> None:
-    """Package-owned auth/account/admin surfaces are reachable anonymously."""
+def test_platform_auth_routes_exist(tmp_path: Path) -> None:
     with TestClient(app) as client:
         login = client.get("/login")
         register = client.get("/register")
@@ -407,6 +427,38 @@ def test_platform_auth_routes_exist() -> None:
     assert admin_users.status_code == 303
     assert invite.status_code in {303, 401, 403}
     assert logout.status_code == 303
+
+    result = subprocess.run(
+        [sys.executable, "-c", """
+from http.cookies import SimpleCookie
+from fastapi.testclient import TestClient
+from my_auth.fastapi import PasskeyCookies
+from anonimizator3000.main import app, _settings_boot
+
+client = TestClient(app)
+login = client.get('/login')
+assert login.status_code == 200
+session = SimpleCookie()
+for header in login.headers.get_list('set-cookie'):
+    session.load(header)
+assert session[_settings_boot.session_cookie_name]['samesite'].lower() == 'strict'
+options = client.post('/api/auth/login/options')
+assert options.status_code == 200
+challenge = SimpleCookie()
+for header in options.headers.get_list('set-cookie'):
+    challenge.load(header)
+assert challenge[PasskeyCookies().authentication_challenge]['samesite'].lower() == 'lax'
+"""],
+        env={
+            **os.environ,
+            "ANON_SESSION_COOKIE_SAMESITE": "strict",
+            "ANON_AUTH_DB": str(tmp_path / "auth.sqlite3"),
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_legacy_untyped_session_does_not_authenticate_existing_user(

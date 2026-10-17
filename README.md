@@ -2,7 +2,7 @@
 
 Publiczny portal do lokalnej anonimizacji dokumentów.
 
-Upload dokumentów trafia wyłącznie do pamięci procesu. Aplikacja nie zapisuje oryginalnych dokumentów na dysku. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania. Wynik anonimizacji jest trzymany krótko w pamięci, żeby użytkownik mógł go pobrać.
+Bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`. Fala zapisuje metadane workflow w tymczasowym pliku SQLite `run.sqlite` na dysku. Plik leży w katalogu `anon-run-*` w systemowym katalogu tymczasowym. Katalog jest sprzątany przy normalnym wyjściu z przetwarzania; po awarii usunięcie nie jest gwarantowane. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania. Wynik anonimizacji jest trzymany krótko w pamięci, żeby użytkownik mógł go pobrać.
 
 Osobno od dokumentów działa trwała baza SQLite platformy auth (passkey / konta użytkowników) — patrz sekcja Auth i zmienna `ANON_AUTH_DB`.
 
@@ -18,7 +18,7 @@ Logika jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 - `github.com/mikolaj92/Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
 - `src/anonimizator3000` - UI, upload, limity per IP, lokalny worker i integracja trzech pakietów.
 
-`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: aktualny BOM z `COMPAT.md` to jedna niemienna generacja `app-factory` `v0.6.22` / `my-auth` `v0.5.4` / `my-usermanager` `v0.6.5`. Osobno `Docxtor` `v0.4.3`, `posejdon` `v0.1.5`, a `fala-runtime` po `rev`. `uv.lock` przypina konkretne commity.
+`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: aktualny BOM z `COMPAT.md` to jedna niemienna generacja `app-factory` `v0.6.22` / `my-auth` `v0.5.4` / `my-usermanager` `v0.6.5`. Osobno `Docxtor` `v0.14.1`, `posejdon` `v0.2.3`, a `fala-runtime` po `rev`. `uv.lock` przypina konkretne commity.
 
 ### Przepływy AI / analizy (issue #23)
 
@@ -35,10 +35,14 @@ uruchamia graf `DOCUMENT_FLOW`. Każdy węzeł jest osobnym adapterem
 | `serialize` | dokument i zanonimizowane segmenty | nazwa, MIME i bajty wyniku w formacie wejściowym | metadane pliku i rozmiar |
 | `redact_authors` | bajty wyniku | bajty bez tożsamości autorów | liczba zanonimizowanych autorów |
 
-Ciężkie lub wrażliwe dane pozostają tylko w pamięci procesu i są usuwane po
-runie; przez magazyn Fala przechodzą wyłącznie małe metadane JSON. Kontrakty
-adapterów są typowane w `steps.py`. Nie znaleziono innych przepływów AI ani luk
-wymagających osobnych zadań.
+Bajty źródła, tekst dokumentu i bajty wyniku pozostają w pamięci procesu
+w `JobContext`; kontekst jest usuwany po zakończeniu zadania. Fala zapisuje
+metadane JSON w `run.sqlite` w katalogu `anon-run-*` w systemowym katalogu
+tymczasowym. Obejmują one m.in. nazwę pliku wynikowego i liczby wykryć;
+mały rozmiar nie oznacza braku danych wrażliwych. Katalog jest sprzątany przy
+normalnym wyjściu z przetwarzania, bez gwarancji usunięcia po awarii.
+Kontrakty adapterów są typowane w `steps.py`. Nie znaleziono innych przepływów
+AI ani luk wymagających osobnych zadań.
 
 ### Fala compatibility boundary
 
@@ -181,12 +185,15 @@ dostępem do `mikolaj92/Posejdon`.
 git clone https://github.com/mikolaj92/anonimizator3000.git
 cd anonimizator3000
 uv sync
-uv run uvicorn anonimizator3000.main:app --reload
+uv run anonimizator3000
 ```
+
+Skrypt używa stałych ustawień: host `127.0.0.1`, port `8000` i włączone automatyczne przeładowanie.
+Skrypt `anonimizator3000` nie obsługuje flag `--host`, `--port` ani `--reload`; inne ustawienia wymagają bezpośredniego uruchomienia uvicorn.
 
 Potem otwórz `http://127.0.0.1:8000`.
 
-Żeby wystawić aplikację w LAN:
+Żeby wystawić aplikację w LAN, uruchom bezpośrednio uvicorn:
 
 ```bash
 uv run uvicorn anonimizator3000.main:app --host 0.0.0.0 --port 8000 --reload
@@ -194,7 +201,6 @@ uv run uvicorn anonimizator3000.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Obsługiwane wejście
 
-- tekstowe: `.txt`, `.md`, `.csv`, `.json`, `.xml`, `.html`, `.log`
 - `.pdf` przez `Docxtor`
 - `.docx` przez `Docxtor`
 
@@ -202,7 +208,6 @@ Wynik zachowuje typ wejścia:
 
 - PDF -> PDF
 - DOCX -> DOCX
-- tekst -> TXT
 
 PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych stronach, więc liczba stron i grafika dokumentu zostają zachowane, gdy zmienione fragmenty da się dopasować do tekstu strony. Jeśli fragmentu nie da się bezpiecznie odnaleźć, `Docxtor` zamyka ryzyko wycieku przez zastąpienie tekstu tej strony. DOCX jest modyfikowany w pamięci przez `Docxtor`; struktura akapitów i tabel zostaje, ale formatowanie w ramach jednego akapitu może się uprościć.
 
@@ -210,7 +215,7 @@ PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych strona
 
 Warstwy są w `Posejdon`:
 
-1. Presidio jako pipeline wykrywania i anonimizacji. Przypięty `TextAnonymizer` (`v0.1.5`) montuje regex i opcjonalny GLiNER; host sam dokłada `PresidioDetector` z pakietu, bo kontrakt portalu nadal go wymaga. Brak działającego backendu Presidio zatrzymuje start.
+1. Presidio jako pipeline wykrywania i anonimizacji. Przypięty `TextAnonymizer` (`v0.2.3`) montuje regex i opcjonalny GLiNER; host sam dokłada `PresidioDetector` z pakietu, bo kontrakt portalu nadal go wymaga. Brak działającego backendu Presidio zatrzymuje start.
 2. Opcjonalny GLiNER dla `PERSON`, `ORG`, `LOC`, adresów, szpitali, urzędów, spraw i umów.
 3. Regex + walidacja dla identyfikatorów i numerów.
 
@@ -280,7 +285,7 @@ To celowa polityka produktu (lokalny / self-hosted portal), nie bug. Jeśli wdra
 | `ANON_SESSION_SECRET` | `dev-anon-session-secret-change-me` | Sekret podpisu cookie sesji (Starlette). **W produkcji ustaw własny, losowy sekret.** |
 | `ANON_SESSION_COOKIE` | `anon_session` | Nazwa cookie sesji |
 | `ANON_SESSION_COOKIE_SECURE` | `false` | `Secure` na cookie sesji i passkey cookies (`true` za HTTPS) |
-| `ANON_SESSION_COOKIE_SAMESITE` | `lax` | `SameSite` cookie sesji |
+| `ANON_SESSION_COOKIE_SAMESITE` | `lax` | `SameSite` wyłącznie cookie sesji; cookies passkey zawsze mają `SameSite=lax`, niezależnie od tej zmiennej |
 | `ANON_SESSION_MAX_AGE` | `1209600` (14 dni) | Max age sesji w sekundach |
 | `ANON_AUTH_DB` | `storage/auth.sqlite3` (w katalogu repo) | Ścieżka trwałej bazy SQLite auth (credentials, users, grants) |
 | `ANON_PASSKEY_RP_ID` | `localhost` | WebAuthn Relying Party ID (domena bez schematu) |
@@ -315,7 +320,10 @@ Domyślne limity można zmienić przez zmienne środowiskowe:
 | `ANON_TRUST_PROXY_HEADERS` | `false` | Czy ufać `X-Forwarded-For` |
 | `ANON_GLINER_ENABLED` | `true` | Włącza GLiNER; `false` jest jawną zgodą na słabszy stos |
 | `ANON_GLINER_MODEL` | `urchade/gliner_multi_pii-v1` | Model GLiNER; nie może być pusty, gdy GLiNER jest włączony |
-| `ANON_GLINER_THRESHOLD` | `0.45` | Próg predykcji GLiNER |
+| `ANON_GLINER_THRESHOLD` | `0.45` | Próg predykcji GLiNER z zakresu `(0, 1]` |
+| `ANON_REPLACEMENT_STYLE` | `mask` | Styl anonimizacji: `mask` daje `****`, a `labels` etykiety, np. `[OSOBA_1]` |
+
+UI nie pokazuje selektora stylu. Pole multipart `style` w `POST /jobs` przyjmuje `mask` lub `labels` i nadpisuje ustawienie środowiskowe dla danego zadania. Brak pola lub niepoprawna wartość oznacza użycie ustawienia środowiskowego.
 
 `ANON_TRUST_PROXY_HEADERS=true` włączaj tylko za reverse proxy, który czyści i ustawia `X-Forwarded-For`.
 
@@ -331,8 +339,9 @@ kod, testy i manifest nie wróciły do legacy klienta HTTP.
 
 ## Prywatność
 
-- brak zapisu **uploadów dokumentów** na dysku — oryginały i wyniki są tylko w pamięci procesu
-- workflow Fali działa na lokalnym store w pamięci procesu
+- bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`; wynik pozostaje w pamięci do pobrania lub wygaśnięcia
+- metadane workflow Fali, w tym nazwa pliku wynikowego i liczby wykryć, trafiają na dysk do `run.sqlite` w katalogu `anon-run-*` w systemowym katalogu tymczasowym; mogą zawierać dane wrażliwe
+- katalog workflow jest sprzątany przy normalnym wyjściu z przetwarzania; usunięcie po awarii nie jest gwarantowane
 - wynik anonimizacji wygasa po TTL (`ANON_JOB_TTL_SECONDS`)
 - **auth jest trwały**: konta, passkey credentials i role leżą w SQLite (`ANON_AUTH_DB`, domyślnie `storage/auth.sqlite3`) — to nie jest baza dokumentów
 - odrzucanie za dużych plików przed anonimizacją

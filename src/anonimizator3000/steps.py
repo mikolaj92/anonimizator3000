@@ -165,7 +165,7 @@ def serialize(request: StepRunRequest) -> SerializeOutput:
     return {
         "filename": result.filename,
         "content_type": result.content_type,
-        "size": len(result.data),
+        "size": len(context.result_bytes),
     }
 
 
