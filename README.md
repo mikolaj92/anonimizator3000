@@ -2,7 +2,7 @@
 
 Publiczny portal do lokalnej anonimizacji dokumentów.
 
-Bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`. Fala zapisuje metadane workflow w tymczasowym pliku SQLite `run.sqlite` na dysku. Plik leży w katalogu `anon-run-*` w systemowym katalogu tymczasowym. Katalog jest sprzątany przy normalnym wyjściu z przetwarzania; po awarii usunięcie nie jest gwarantowane. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania. Wynik anonimizacji jest trzymany krótko w pamięci, żeby użytkownik mógł go pobrać.
+Bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`. Fala zapisuje metadane workflow w tymczasowym pliku SQLite `run.sqlite` na dysku. Plik leży w katalogu `anon-run-*` w systemowym katalogu tymczasowym. Katalog jest sprzątany przy normalnym wyjściu z przetwarzania; po awarii usunięcie nie jest gwarantowane. Oryginał jest usuwany z pamięci zaraz po zakończeniu zadania.
 
 Osobno od dokumentów działa trwała baza SQLite platformy auth (passkey / konta użytkowników) — patrz sekcja Auth i zmienna `ANON_AUTH_DB`.
 
@@ -316,7 +316,7 @@ Domyślne limity można zmienić przez zmienne środowiskowe:
 | `ANON_MAX_ACTIVE_JOBS_PER_IP` | `2` | Maksymalna liczba aktywnych zadań per IP |
 | `ANON_RATE_LIMIT_SUBMISSIONS` | `100` | Liczba uploadów per okno czasowe |
 | `ANON_RATE_LIMIT_WINDOW_SECONDS` | `600` | Okno limitu per IP |
-| `ANON_JOB_TTL_SECONDS` | `900` | Czas trzymania zakończonego wyniku w pamięci |
+| `ANON_JOB_TTL_SECONDS` | `900` | Próg wieku zakończonego zadania od ostatniej aktualizacji, w sekundach |
 | `ANON_TRUST_PROXY_HEADERS` | `false` | Czy ufać `X-Forwarded-For` |
 | `ANON_GLINER_ENABLED` | `true` | Włącza GLiNER; `false` jest jawną zgodą na słabszy stos |
 | `ANON_GLINER_MODEL` | `urchade/gliner_multi_pii-v1` | Model GLiNER; nie może być pusty, gdy GLiNER jest włączony |
@@ -339,10 +339,10 @@ kod, testy i manifest nie wróciły do legacy klienta HTTP.
 
 ## Prywatność
 
-- bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`; wynik pozostaje w pamięci do pobrania lub wygaśnięcia
+- bajty i tekst dokumentu są przetwarzane w pamięci procesu w `JobContext`; pobranie wyniku nie usuwa zadania
 - metadane workflow Fali, w tym nazwa pliku wynikowego i liczby wykryć, trafiają na dysk do `run.sqlite` w katalogu `anon-run-*` w systemowym katalogu tymczasowym; mogą zawierać dane wrażliwe
 - katalog workflow jest sprzątany przy normalnym wyjściu z przetwarzania; usunięcie po awarii nie jest gwarantowane
-- wynik anonimizacji wygasa po TTL (`ANON_JOB_TTL_SECONDS`)
+- sprzątanie co 30 sekund usuwa zadania `done` i `failed` oraz ich wyniki po przekroczeniu TTL (`ANON_JOB_TTL_SECONDS`) od ostatniej aktualizacji; zadania `queued` i `processing` pozostają
 - **auth jest trwały**: konta, passkey credentials i role leżą w SQLite (`ANON_AUTH_DB`, domyślnie `storage/auth.sqlite3`) — to nie jest baza dokumentów
 - odrzucanie za dużych plików przed anonimizacją
 - limit aktywnych zadań i rate limit per IP

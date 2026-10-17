@@ -1,11 +1,13 @@
 import asyncio
 from io import BytesIO
+from types import SimpleNamespace
 
 import pytest
 from docx import Document
 from docxtor import DOCX_MIME
 from posejdon import ReplacementKind
 
+from anonimizator3000 import jobs
 from anonimizator3000.jobs import DocumentProcessingQueue, QueueRejected
 
 
@@ -60,8 +62,17 @@ async def _wait_for_done(queue: DocumentProcessingQueue, job_id: str):
 
 
 @pytest.mark.asyncio
-async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing() -> None:
+@pytest.mark.parametrize("status", ["done", "failed"])
+async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing(
+    monkeypatch: pytest.MonkeyPatch, status: str
+) -> None:
     queue = _make_queue(_FakeAnonymizer(), max_active_jobs_per_ip=1)
+    if status == "failed":
+
+        def fail_processing(*args, **kwargs):
+            raise RuntimeError("Controlled processing failure")
+
+        monkeypatch.setattr(jobs, "process_document", fail_processing)
 
     first = await queue.submit(
         ip="127.0.0.1",
@@ -83,18 +94,63 @@ async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_proc
     finally:
         await queue.stop()
 
-    assert done.status == "done"
-    assert done.result_content_type == DOCX_MIME
+    assert done.status == status
     assert done.has_source_bytes is False
-    assert done.findings == {"TEST": 1}
+    assert queue._jobs[first.id].source_filename is None
 
     document = await queue.result_document(first.id)
-    assert document is not None
-    _, content_type, data = document
-    assert content_type == DOCX_MIME
-    text = "\n".join(p.text for p in Document(BytesIO(data)).paragraphs)
-    assert "secret" not in text
-    assert "<REDACTED>" in text
+    if status == "done":
+        assert done.result_content_type == DOCX_MIME
+        assert done.findings == {"TEST": 1}
+        assert document is not None
+        _, content_type, data = document
+        assert content_type == DOCX_MIME
+        text = "\n".join(p.text for p in Document(BytesIO(data)).paragraphs)
+        assert "secret" not in text
+        assert "<REDACTED>" in text
+    else:
+        assert done.error == "Controlled processing failure"
+        assert document is None
+
+    finished = queue._jobs[first.id]
+    finished.created_at = 100.0
+    finished.updated_at = 200.0
+    active_sources = {}
+    for active_status in ("queued", "processing"):
+        source = _docx_bytes("synthetic active document")
+        active = await queue.submit(
+            ip=active_status,
+            filename=f"{active_status}.docx",
+            content_type=DOCX_MIME,
+            data=source,
+        )
+        job = queue._jobs[active.id]
+        job.status = active_status
+        job.created_at = 50.0
+        job.updated_at = 100.0
+        active_sources[active.id] = source
+
+    with monkeypatch.context() as clock_patch:
+        for now in (259.0, 260.0, 261.0):
+            clock_patch.setattr(jobs, "time", SimpleNamespace(monotonic=lambda now=now: now))
+            # A read alone does not expire a job, even after TTL.
+            assert await queue.get(first.id) is not None
+            for _ in range(2):
+                await queue._cleanup()
+                if now <= 260.0:
+                    snapshot = await queue.get(first.id)
+                    assert snapshot is not None
+                    assert snapshot.status == status
+                    assert await queue.result_document(first.id) == document
+                else:
+                    assert await queue.get(first.id) is None
+                    assert await queue.result_document(first.id) is None
+                for job_id, source in active_sources.items():
+                    snapshot = await queue.get(job_id)
+                    assert snapshot is not None
+                    assert snapshot.status in {"queued", "processing"}
+                    assert snapshot.has_source_bytes is True
+                    assert queue._jobs[job_id].source_bytes == source
 
 
 @pytest.mark.asyncio
