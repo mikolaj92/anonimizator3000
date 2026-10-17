@@ -183,8 +183,6 @@ async def create_job(request: Request) -> HTMLResponse:
             ),
         )
     except (UploadError, QueueRejected) as error:
-        if _is_htmx(request):
-            return _error_fragment(request, str(error), status_code=error.status_code)
         return _index_response(request, error_message=str(error), status_code=error.status_code)
 
     if _is_htmx(request):
@@ -197,8 +195,6 @@ async def get_job(request: Request, job_id: str) -> HTMLResponse:
     job = await _queue(request).get(job_id)
     if job is None:
         message = "Zadanie wygasło albo nie istnieje."
-        if _is_htmx(request):
-            return _error_fragment(request, message, status_code=404)
         return _index_response(request, error_message=message, status_code=404)
     if _is_htmx(request):
         return _job_fragment(request, job)
@@ -237,6 +233,8 @@ def _index_response(
     error_message: str | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
+    if error_message is not None and _is_htmx(request):
+        return _error_fragment(request, error_message, status_code=status_code)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
