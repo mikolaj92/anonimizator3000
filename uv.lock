@@ -73,7 +73,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.22" },
-    { name = "docxtor", git = "https://github.com/mikolaj92/Docxtor.git?tag=v0.4.3" },
+    { name = "docxtor", git = "https://github.com/mikolaj92/Docxtor.git?tag=v0.14.1" },
     { name = "en-core-web-lg", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" },
     { name = "fala-runtime", git = "https://github.com/mikolaj92/Fala.git?rev=6dd634d18b4812faed04897426bc69322ef59c34" },
     { name = "fastapi", specifier = ">=0.141.1" },
@@ -82,8 +82,8 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "my-auth", extras = ["fastapi-htmx"], git = "https://github.com/mikolaj92/my-auth?tag=v0.5.4" },
     { name = "my-usermanager", extras = ["fastapi-htmx", "myauth"], git = "https://github.com/mikolaj92/my-usermanager?tag=v0.6.5" },
-    { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5" },
-    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5" },
+    { name = "posejdon", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.2.3" },
+    { name = "posejdon", extras = ["detectors"], marker = "extra == 'detectors'", git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.2.3" },
     { name = "presidio-analyzer", specifier = ">=2.2.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pypdf", marker = "extra == 'dev'", specifier = ">=5.0.0" },
@@ -456,13 +456,11 @@ wheels = [
 
 [[package]]
 name = "docxtor"
-version = "0.4.3"
-source = { git = "https://github.com/mikolaj92/Docxtor.git?tag=v0.4.3#523e81ade0b9ee155c35ab175bc62b7979f7eb8a" }
+version = "0.14.1"
+source = { git = "https://github.com/mikolaj92/Docxtor.git?tag=v0.14.1#e6ed0fea470b3a483b086167af419dfaa50d42e5" }
 dependencies = [
     { name = "pymupdf" },
-    { name = "pypdf" },
     { name = "python-docx" },
-    { name = "reportlab" },
 ]
 
 [[package]]
@@ -1212,11 +1210,9 @@ wheels = [
 
 [[package]]
 name = "posejdon"
-version = "0.1.1"
-source = { git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5#714301d3e55cd5459b1c7a06b25aa37cedb8583a" }
+version = "0.2.3"
+source = { git = "https://github.com/mikolaj92/Posejdon.git?tag=v0.2.3#6aefba61679d5dc5028c7a48eaf741acede4db00" }
 dependencies = [
-    { name = "click" },
-    { name = "httpx" },
     { name = "jinja2" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
