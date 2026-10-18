@@ -60,8 +60,19 @@ async def _wait_for_done(queue: DocumentProcessingQueue, job_id: str):
 
 
 @pytest.mark.asyncio
-async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing() -> None:
-    queue = _make_queue(_FakeAnonymizer(), max_active_jobs_per_ip=1)
+@pytest.mark.parametrize(
+    ("max_size", "per_ip_limit", "status_code", "message"),
+    [
+        (10, 1, 429, "Za dużo aktywnych zadań z tego IP."),
+        (1, 2, 503, "Kolejka jest pełna. Spróbuj później."),
+    ],
+)
+async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing(
+    max_size: int, per_ip_limit: int, status_code: int, message: str
+) -> None:
+    queue = _make_queue(
+        _FakeAnonymizer(), max_size=max_size, max_active_jobs_per_ip=per_ip_limit
+    )
 
     first = await queue.submit(
         ip="127.0.0.1",
@@ -69,13 +80,18 @@ async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_proc
         content_type=DOCX_MIME,
         data=_docx_bytes("secret text"),
     )
-    with pytest.raises(QueueRejected):
+    assert first.status == "queued"
+    with pytest.raises(QueueRejected) as error:
         await queue.submit(
             ip="127.0.0.1",
             filename="b.docx",
             content_type=DOCX_MIME,
             data=_docx_bytes("secret text"),
         )
+
+    assert error.value.status_code == status_code
+    assert str(error.value) == message
+    assert (await queue.get(first.id)).status == "queued"
 
     await queue.start()
     try:

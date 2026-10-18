@@ -243,30 +243,48 @@ def test_plain_form_upload_redirects_to_server_rendered_job_page() -> None:
     assert page.text.count('id="job-panel"') == 1
 
 
-def test_plain_form_validation_error_returns_full_page() -> None:
+@pytest.mark.parametrize("htmx", [False, True])
+@pytest.mark.parametrize("status_code", [413, 503])
+def test_plain_form_validation_error_returns_full_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, htmx: bool, status_code: int
+) -> None:
+    monkeypatch.setenv("ANON_AUTH_DB", str(tmp_path / "auth.sqlite3"))
+    monkeypatch.setenv("ANON_QUEUE_MAX_SIZE", "1")
+    monkeypatch.setenv("ANON_MAX_ACTIVE_JOBS_PER_IP", "2")
+    monkeypatch.setenv("ANON_RATE_LIMIT_SUBMISSIONS", "10")
+    headers = {"HX-Request": "true"} if htmx else {}
     with TestClient(app) as client:
-        response = client.post(
-            "/jobs",
-            files={"document": ("big.txt", b"x" * 5_200_000, "text/plain")},
-        )
+        if status_code == 503:
+            queue = client.app.state.queue
+            client.portal.call(queue.stop)
+            files = {"document": ("sample.docx", _docx_bytes("hello"), DOCX_MIME)}
+            first = client.post(
+                "/jobs", headers=headers, files=files, follow_redirects=False
+            )
+            assert first.status_code == (200 if htmx else 303)
+            job_url = (
+                "/jobs/" + first.text.split("/jobs/", 1)[1].split('"', 1)[0]
+                if htmx
+                else first.headers["location"]
+            )
+            job_id = job_url.removeprefix("/jobs/")
+            assert client.portal.call(queue.get, job_id).status == "queued"
+        else:
+            files = {"document": ("big.txt", b"x" * 5_200_000, "text/plain")}
 
-    assert response.status_code == 413
+        response = client.post(
+            "/jobs", headers=headers, files=files, follow_redirects=False
+        )
+        if status_code == 503:
+            assert client.portal.call(queue.get, job_id).status == "queued"
+
+    assert response.status_code == status_code
     assert "Odrzucono upload" in response.text
-    assert 'id="job-panel"' in response.text
-    assert 'data-app-file-upload' in response.text
-
-
-def test_upload_size_limit_returns_fragment() -> None:
-    with TestClient(app) as client:
-        response = client.post(
-            "/jobs",
-            headers={"HX-Request": "true"},
-            files={"document": ("big.txt", b"x" * 5_200_000, "text/plain")},
-        )
-
-        assert response.status_code == 413
-        assert "Odrzucono upload" in response.text
-        assert 'id="job-panel"' not in response.text
+    if status_code == 503:
+        assert "Kolejka jest pełna. Spróbuj później." in response.text
+    assert ('id="job-panel"' in response.text) is not htmx
+    if not htmx:
+        assert 'data-app-file-upload' in response.text
 
 
 def test_htmx_config_swaps_client_error_fragments() -> None:
