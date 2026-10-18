@@ -18,7 +18,7 @@ Logika jest w osobnych pakietach pobieranych z GitHub przez `uv`:
 - `github.com/mikolaj92/Fala` - runtime procesu: pipeline, statusy, claimy workerów i event log przetwarzania.
 - `src/anonimizator3000` - UI, upload, limity per IP, lokalny worker i integracja trzech pakietów.
 
-`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: aktualny BOM z `COMPAT.md` to jedna niemienna generacja `app-factory` `v0.6.22` / `my-auth` `v0.5.4` / `my-usermanager` `v0.6.5`. Osobno `Docxtor` `v0.4.3`, `posejdon` `v0.1.5`, a `fala-runtime` po `rev`. `uv.lock` przypina konkretne commity.
+`pyproject.toml` pinuje źródła Git tagami i rewizjami, nie branchem `main`: aktualny BOM z `COMPAT.md` to jedna niemienna generacja `app-factory` `v0.6.22` / `my-auth` `v0.5.4` / `my-usermanager` `v0.6.5`. Osobno `Docxtor` `v0.14.1`, `posejdon` `v0.2.3`, a `fala-runtime` po `rev`. `uv.lock` przypina konkretne commity.
 
 ### Przepływy AI / analizy (issue #23)
 
@@ -215,7 +215,7 @@ PDF z warstwą tekstową jest modyfikowany przez redakcje na oryginalnych strona
 
 Warstwy są w `Posejdon`:
 
-1. Presidio jako pipeline wykrywania i anonimizacji. Przypięty `TextAnonymizer` (`v0.1.5`) montuje regex i opcjonalny GLiNER; host sam dokłada `PresidioDetector` z pakietu, bo kontrakt portalu nadal go wymaga. Brak działającego backendu Presidio zatrzymuje start.
+1. Presidio jako pipeline wykrywania i anonimizacji. Przypięty `TextAnonymizer` (`v0.2.3`) montuje regex i opcjonalny GLiNER; host sam dokłada `PresidioDetector` z pakietu, bo kontrakt portalu nadal go wymaga. Brak działającego backendu Presidio zatrzymuje start.
 2. Opcjonalny GLiNER dla `PERSON`, `ORG`, `LOC`, adresów, szpitali, urzędów, spraw i umów.
 3. Regex + walidacja dla identyfikatorów i numerów.
 
