@@ -52,19 +52,15 @@ detectors = [
 ]
 
 [tool.uv.sources]
-# Immutable identity adapter tags from one compatible generation.
 app-factory = { git = "https://github.com/mikolaj92/app-factory", tag = "v0.6.22" }
 my-auth = { git = "https://github.com/mikolaj92/my-auth", tag = "v0.5.4" }
 my-usermanager = { git = "https://github.com/mikolaj92/my-usermanager", tag = "v0.6.5" }
 docxtor = { git = "https://github.com/mikolaj92/Docxtor.git", tag = "v0.14.1" }
-# CPython carrier API: fala.models, fala.carrier_runtime, fala.runtime_backend.
-# Fala v0.7.x host/sdk does not provide RuntimeBackendService.
 fala-runtime = { git = "https://github.com/mikolaj92/Fala.git", rev = "6dd634d18b4812faed04897426bc69322ef59c34" }
 posejdon = { git = "https://github.com/mikolaj92/Posejdon.git", tag = "v0.2.3" }
 en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }
 
 [tool.uv]
-# Unify nested app-factory sources; my-auth already matches my-usermanager.
 override-dependencies = [
   "app-factory[platform]",
 ]
