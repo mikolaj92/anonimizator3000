@@ -136,12 +136,18 @@ def test_uv_lock_resolves_current_fastapi_httpx2_stack() -> None:
     )
 
 
-def test_docs_describe_current_runtime_contract() -> None:
+def test_docs_claim_current_compat_bom() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    for api in ("fala.models", "fala.carrier_runtime.FalaRuntime", "fala.runtime_backend"):
-        assert api in readme
-    assert "RuntimeBackendService" in readme
-    assert "Fala v0.7.x go nie dostarcza" in readme
-    assert "Posejdon` jest prywatnym repozytorium" in readme
-    assert _pyproject()["project"]["requires-python"] in readme
+    assert (
+        APP_FACTORY_TAG in pyproject
+        and MY_AUTH_TAG in pyproject
+        and MY_USERMANAGER_TAG in pyproject
+    )
+    assert APP_FACTORY_TAG in readme and MY_AUTH_TAG in readme and MY_USERMANAGER_TAG in readme
+    assert "COMPAT.md has no v0.6.11 line" not in pyproject
+    assert "COMPAT.md has no v0.6.11 line" not in readme
+    assert "latest v0.6.10" not in pyproject
+    assert "latest v0.6.10" not in readme
+    assert "v0.6.10 / v0.4.5 / v0.5.6" not in readme
