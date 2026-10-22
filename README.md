@@ -14,15 +14,22 @@ Logika przetwarzania pochodzi z pakietów pobieranych przez `uv`:
 `pyproject.toml` przypina źródła Git tagami lub rewizjami, nie branchem `main`:
 `app-factory v0.6.22`, `my-auth v0.5.4`, `my-usermanager v0.6.5`,
 `Docxtor v0.14.1`, `posejdon v0.2.3` i `fala-runtime` przez `rev`.
-`uv.lock` przypina konkretne commity; to nie jest wiersz COMPAT.md.
+`uv.lock` przypina konkretne commity.
 
 ### Przepływ dokumentu
 
-`pipeline.py` uruchamia graf `DOCUMENT_FLOW` w tymczasowym runtime Fala opartym na SQLite:
-`convert` → `load` → `anonymize` → `serialize` → `redact_authors`.
-Adaptery `python_function` w `steps.py` walidują typ, odczytują dokument, anonimizują tekst,
-zapisują wynik w formacie wejściowym i usuwają tożsamości autorów DOCX.
-Dokument pozostaje w pamięci `JobContext`; runtime zapisuje tylko metadane opisane w sekcji „Prywatność”.
+`pipeline.py` tworzy run w Fali i uruchamia graf `DOCUMENT_FLOW`.
+Każdy węzeł jest adapterem `python_function`. Zależności ustalają kolejność:
+
+| Krok | Wejście ze współdzielonego `JobContext` | Wyjście do kontekstu | Metadane rejestrowane przez Fala |
+| --- | --- | --- | --- |
+| `convert` | nazwa i MIME | — | zwalidowany typ źródła |
+| `load` | nazwa, MIME, bajty źródłowe, limit znaków | sparsowany dokument Docxtor | liczba segmentów i znaków |
+| `anonymize` | tekst dokumentu, styl, `SegmentAnonymizer` | zanonimizowane segmenty i findings | liczby findings według kategorii |
+| `serialize` | dokument i zanonimizowane segmenty | nazwa, MIME i bajty wyniku w formacie wejściowym | metadane pliku i rozmiar |
+| `redact_authors` | bajty wyniku | bajty bez tożsamości autorów | liczba zanonimizowanych autorów |
+
+Kontrakty adapterów są typowane w `steps.py`.
 Portal używa API CPython carrier: `fala.models`, `fala.carrier_runtime.FalaRuntime`
 i `fala.runtime_backend`, w tym `RuntimeBackendService`.
 Przypięta rewizja `fala-runtime` dostarcza to API; Fala v0.7.x go nie dostarcza.
@@ -30,7 +37,13 @@ Zmiana na host/sdk wymaga migracji integracji, nie samej aktualizacji zależnoś
 
 ## Stack
 
-Portal używa `uv`, FastAPI, HTMX i Basecoat UI.
+- `uv`
+- FastAPI
+- HTMX
+- Basecoat UI
+- Docxtor
+- Posejdon
+- Fala
 
 ### Klient HTTP
 
@@ -201,8 +214,9 @@ uv run --extra dev ruff check .
 ## Prywatność
 
 - Bajty i tekst dokumentu są przetwarzane w pamięci w `JobContext`; kontekst znika po zakończeniu zadania.
-- Pobranie nie usuwa wyniku; pozostaje on w pamięci do sprzątania po upływie `ANON_JOB_TTL_SECONDS`.
+- Wynik pozostaje w pamięci do pobrania lub wygaśnięcia `ANON_JOB_TTL_SECONDS`.
 - Fala zapisuje metadane workflow w `run.sqlite` w katalogu `anon-run-*` w systemowym katalogu tymczasowym.
 - Metadane obejmują nazwę pliku wynikowego i liczby wykryć; mogą zawierać dane wrażliwe.
 - Katalog workflow jest sprzątany przy normalnym wyjściu; usunięcie po awarii nie jest gwarantowane.
-- **Auth jest trwały**: SQLite `ANON_AUTH_DB` przechowuje konta, passkey credentials i role niezależnie od runtime'u Fala.
+- **Auth jest trwały**: konta, passkey credentials i role leżą w SQLite `ANON_AUTH_DB`, nie w bazie dokumentów.
+- Portal odrzuca za duże pliki, ogranicza aktywne zadania i stosuje rate limit per IP.
