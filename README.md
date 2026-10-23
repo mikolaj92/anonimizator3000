@@ -18,18 +18,10 @@ Logika przetwarzania pochodzi z pakietów pobieranych przez `uv`:
 
 ### Przepływ dokumentu
 
-`pipeline.py` tworzy run w Fali i uruchamia graf `DOCUMENT_FLOW`.
-Każdy węzeł jest adapterem `python_function`. Zależności ustalają kolejność:
-
-| Krok | Wejście ze współdzielonego `JobContext` | Wyjście do kontekstu | Metadane rejestrowane przez Fala |
-| --- | --- | --- | --- |
-| `convert` | nazwa i MIME | — | zwalidowany typ źródła |
-| `load` | nazwa, MIME, bajty źródłowe, limit znaków | sparsowany dokument Docxtor | liczba segmentów i znaków |
-| `anonymize` | tekst dokumentu, styl, `SegmentAnonymizer` | zanonimizowane segmenty i findings | liczby findings według kategorii |
-| `serialize` | dokument i zanonimizowane segmenty | nazwa, MIME i bajty wyniku w formacie wejściowym | metadane pliku i rozmiar |
-| `redact_authors` | bajty wyniku | bajty bez tożsamości autorów | liczba zanonimizowanych autorów |
-
-Kontrakty adapterów są typowane w `steps.py`.
+`pipeline.py` uruchamia graf `DOCUMENT_FLOW` w Fali:
+`convert` → `load` → `anonymize` → `serialize` → `redact_authors`.
+Adaptery `python_function` w `steps.py` mają typowane kontrakty i współdzielą `JobContext`.
+Ostatni krok usuwa tożsamości autorów z metadanych DOCX.
 Portal używa API CPython carrier: `fala.models`, `fala.carrier_runtime.FalaRuntime`
 i `fala.runtime_backend`, w tym `RuntimeBackendService`.
 Przypięta rewizja `fala-runtime` dostarcza to API; Fala v0.7.x go nie dostarcza.
@@ -37,13 +29,7 @@ Zmiana na host/sdk wymaga migracji integracji, nie samej aktualizacji zależnoś
 
 ## Stack
 
-- `uv`
-- FastAPI
-- HTMX
-- Basecoat UI
-- Docxtor
-- Posejdon
-- Fala
+FastAPI, HTMX i Basecoat UI; zależności i uruchamianie obsługuje `uv`.
 
 ### Klient HTTP
 
