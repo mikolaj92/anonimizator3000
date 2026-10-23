@@ -15,9 +15,9 @@
             aria-controls="privacy-information"
           >i</summary>
           <div id="privacy-information" class="info-panel">
-            <p>Udostępniamy kod open source i publiczny compute do anonimizacji dokumentów.</p>
+            <p>Udostępniamy kod open source do samodzielnego uruchomienia. Dokumenty przetwarza serwer operatora tej instalacji.</p>
             <p>Nie oceniamy, kto korzysta z narzędzia. Użytkownik odpowiada za to, co wrzuca.</p>
-            <p>Dokument nie jest zapisywany na dysku przez aplikację. Plik jest używany do przetworzenia, potem usuwany z kolejki; wynik też wygasa.</p>
+            <p>Bajty i tekst dokumentu są przetwarzane w RAM; wynik wygasa. Metadane workflow Fali, w tym nazwa pliku wynikowego, trafiają na dysk do run.sqlite w katalogu anon-run-* w systemowym katalogu tymczasowym. Mogą zawierać dane wrażliwe. Katalog jest sprzątany przy normalnym wyjściu z przetwarzania, bez gwarancji usunięcia po awarii.</p>
             <p>Anonimizacja może pominąć dane. Przed użyciem sprawdź wynik ręcznie.</p>
           </div>
         </details>
@@ -37,10 +37,10 @@
         id="document-upload",
         action="/jobs",
         name="document",
-        accept=".txt,.md,.csv,.json,.xml,.html,.htm,.log,.rtf,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf",
         max_bytes=settings.max_file_bytes,
         choose_label="Wybierz dokument",
-        drop_label="PDF, DOCX, TXT do " ~ ((settings.max_file_bytes / 1000000) | round(1)) ~ " MB",
+        drop_label="PDF, DOCX do " ~ ((settings.max_file_bytes / 1000000) | round(1)) ~ " MB",
         submit_label="Anonimizuj",
         too_large_label="Plik jest za duży: {file}.",
         wrong_type_label="Nieobsługiwany typ pliku: {file}.",

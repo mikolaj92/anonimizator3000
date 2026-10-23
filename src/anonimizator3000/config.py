@@ -28,6 +28,19 @@ def _get_int(name: str, default: int) -> int:
     return value
 
 
+def _get_threshold(name: str, default: float) -> float:
+    raw = getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as error:
+        raise ValueError(f"{name} must be a number") from error
+    if not (0 < value <= 1):
+        raise ValueError(f"{name} must be greater than 0 and at most 1")
+    return value
+
+
 def _get_bool(name: str, default: bool) -> bool:
     raw = getenv(name)
     if raw is None:
@@ -106,7 +119,7 @@ def settings_from_env() -> Settings:
         trust_proxy_headers=_get_bool("ANON_TRUST_PROXY_HEADERS", Settings.trust_proxy_headers),
         gliner_enabled=_get_bool("ANON_GLINER_ENABLED", Settings.gliner_enabled),
         gliner_model=_get_optional_string("ANON_GLINER_MODEL", Settings.gliner_model),
-        gliner_threshold=float(getenv("ANON_GLINER_THRESHOLD", Settings.gliner_threshold)),
+        gliner_threshold=_get_threshold("ANON_GLINER_THRESHOLD", Settings.gliner_threshold),
         replacement_style=normalize_replacement_style(
             getenv("ANON_REPLACEMENT_STYLE"), Settings.replacement_style
         ),

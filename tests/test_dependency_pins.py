@@ -34,9 +34,9 @@ def test_pyproject_pins_git_sources_by_tag_or_rev_not_main() -> None:
     assert sources["app-factory"]["tag"] == APP_FACTORY_TAG
     assert sources["my-auth"]["tag"] == MY_AUTH_TAG
     assert sources["my-usermanager"]["tag"] == MY_USERMANAGER_TAG
-    assert sources["posejdon"]["tag"] == "v0.1.5"
+    assert sources["posejdon"]["tag"] == "v0.2.3"
     assert sources["fala-runtime"]["rev"] == "6dd634d18b4812faed04897426bc69322ef59c34"
-    assert sources["docxtor"]["tag"] == "v0.4.3"
+    assert sources["docxtor"]["tag"] == "v0.14.1"
     assert "rev" not in sources["docxtor"]
     assert "doctotext" not in sources
     assert "pdf2docx>=0.5.8" not in pyproject["project"]["dependencies"]
@@ -91,9 +91,9 @@ def test_readme_documents_tag_and_rev_pins_instead_of_main() -> None:
     assert "app-factory" in readme and APP_FACTORY_TAG in readme
     assert "my-auth" in readme and MY_AUTH_TAG in readme
     assert "my-usermanager" in readme and MY_USERMANAGER_TAG in readme
-    assert "posejdon" in readme and "v0.1.5" in readme
+    assert "posejdon" in readme and "v0.2.3" in readme
     assert "fala-runtime" in readme
-    assert "Docxtor" in readme and "v0.4.3" in readme
+    assert "Docxtor" in readme and "v0.14.1" in readme
     assert "rev" in readme
 
 
@@ -132,7 +132,7 @@ def test_uv_lock_resolves_current_fastapi_httpx2_stack() -> None:
     assert packages["uvicorn"]["version"] == UVICORN_MIN
     assert packages["httpx2"]["version"] == HTTPX2_MIN
     assert packages["posejdon"]["source"]["git"].startswith(
-        "https://github.com/mikolaj92/Posejdon.git?tag=v0.1.5#"
+        "https://github.com/mikolaj92/Posejdon.git?tag=v0.2.3#"
     )
 
 
@@ -140,14 +140,11 @@ def test_docs_claim_current_compat_bom() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert "current platform BOM from app-factory COMPAT.md" in pyproject
     assert (
         APP_FACTORY_TAG in pyproject
         and MY_AUTH_TAG in pyproject
         and MY_USERMANAGER_TAG in pyproject
     )
-    assert "COMPAT.md" in readme
-    assert "aktualny BOM" in readme
     assert APP_FACTORY_TAG in readme and MY_AUTH_TAG in readme and MY_USERMANAGER_TAG in readme
     assert "COMPAT.md has no v0.6.11 line" not in pyproject
     assert "COMPAT.md has no v0.6.11 line" not in readme

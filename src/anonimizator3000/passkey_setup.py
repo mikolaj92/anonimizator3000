@@ -395,11 +395,10 @@ def bootstrap_admin(auth_database: SQLiteAuthDatabase) -> None:
     admin_id = os.getenv("BOOTSTRAP_ADMIN_ID") or os.getenv("ANON_BOOTSTRAP_ADMIN_ID")
     if not admin_id:
         return
-    try:
-        with auth_database.transaction() as tx:
+    with auth_database.transaction() as tx:
+        try:
             tx.grants.add_role_grant(admin_id, ADMIN_ROLE_NAME, Scope.global_())
-        logger.info("Bootstrapped admin role for user %s", admin_id)
-    except DuplicateGrantError:
-        logger.debug("Admin role already granted to %s", admin_id)
-    except Exception:
-        logger.exception("Failed to bootstrap admin for %s", admin_id)
+        except DuplicateGrantError:
+            logger.debug("Admin role already granted to %s", admin_id)
+            return
+    logger.info("Bootstrapped admin role for user %s", admin_id)
