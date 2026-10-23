@@ -198,32 +198,23 @@ async def get_job(request: Request, job_id: str) -> HTMLResponse:
     if job is None:
         message = "Zadanie wygasło albo nie istnieje."
         if _is_htmx(request):
-            response = _error_fragment(request, message, status_code=404)
-        else:
-            response = _index_response(request, error_message=message, status_code=404)
-    elif _is_htmx(request):
-        response = _job_fragment(request, job)
-    else:
-        response = _index_response(request, job=job)
-    response.headers["Cache-Control"] = "no-store"
-    return response
+            return _error_fragment(request, message, status_code=404)
+        return _index_response(request, error_message=message, status_code=404)
+    if _is_htmx(request):
+        return _job_fragment(request, job)
+    return _index_response(request, job=job)
 
 
 @app.get("/jobs/{job_id}/download")
 async def download_job(request: Request, job_id: str) -> Response:
     document = await _queue(request).result_document(job_id)
     if document is None:
-        return PlainTextResponse(
-            "Wynik nie jest dostępny.", status_code=404, headers={"Cache-Control": "no-store"}
-        )
+        return PlainTextResponse("Wynik nie jest dostępny.", status_code=404)
     filename, content_type, data = document
     return Response(
         content=data,
         media_type=content_type,
-        headers={
-            "Content-Disposition": _attachment_header(filename),
-            "Cache-Control": "no-store",
-        },
+        headers={"Content-Disposition": _attachment_header(filename)},
     )
 
 
