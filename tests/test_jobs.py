@@ -6,6 +6,7 @@ from docx import Document
 from docxtor import DOCX_MIME
 from posejdon import ReplacementKind
 
+from anonimizator3000 import jobs
 from anonimizator3000.jobs import DocumentProcessingQueue, QueueRejected
 
 
@@ -60,22 +61,13 @@ async def _wait_for_done(queue: DocumentProcessingQueue, job_id: str):
 
 
 @pytest.mark.asyncio
-async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_processing() -> None:
+@pytest.mark.parametrize("status", ["done", "failed", "queued", "processing"])
+async def test_queue_limits_active_jobs_per_ip_source_cleanup_and_ttl(monkeypatch, status) -> None:
     queue = _make_queue(_FakeAnonymizer(), max_active_jobs_per_ip=1)
-
-    first = await queue.submit(
-        ip="127.0.0.1",
-        filename="a.docx",
-        content_type=DOCX_MIME,
-        data=_docx_bytes("secret text"),
-    )
+    upload = dict(ip="127.0.0.1", content_type=DOCX_MIME, data=_docx_bytes("secret text"))
+    first = await queue.submit(filename="a.docx", **upload)
     with pytest.raises(QueueRejected):
-        await queue.submit(
-            ip="127.0.0.1",
-            filename="b.docx",
-            content_type=DOCX_MIME,
-            data=_docx_bytes("secret text"),
-        )
+        await queue.submit(filename="b.docx", **upload)
 
     await queue.start()
     try:
@@ -95,6 +87,14 @@ async def test_queue_limits_active_jobs_per_ip_and_drops_source_bytes_after_proc
     text = "\n".join(p.text for p in Document(BytesIO(data)).paragraphs)
     assert "secret" not in text
     assert "<REDACTED>" in text
+
+    queue._jobs[first.id].status = status
+    for elapsed in (0, 60, 61):
+        monkeypatch.setattr(jobs.time, "monotonic", lambda age=elapsed: done.updated_at + age)
+        await queue._cleanup()
+        retained = elapsed <= 60 or status in {"queued", "processing"}
+        assert (await queue.get(first.id) is not None) is retained
+        assert bool(await queue.result_document(first.id)) is (retained and status == "done")
 
 
 @pytest.mark.asyncio
