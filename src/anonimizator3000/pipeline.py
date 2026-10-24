@@ -1,13 +1,3 @@
-"""Synchronous runner that drives one document through the Carrier flow.
-
-``process_document`` seeds a :class:`JobContext`, spins up an embedded
-SQLite-backed Fala runtime, instantiates :data:`DOCUMENT_FLOW`, and drives it to
-idle. Fala orchestrates the convert -> load -> anonymize -> serialize blocks; the
-runner just collects the result the blocks left in the shared registry. It calls
-``asyncio.run`` internally, so invoke it from a plain thread (never from inside a
-running event loop) -- the job queue does exactly that via ``asyncio.to_thread``.
-"""
-
 from __future__ import annotations
 
 import asyncio
