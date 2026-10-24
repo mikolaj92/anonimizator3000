@@ -256,15 +256,14 @@ def test_plain_form_validation_error_returns_full_page() -> None:
     assert 'data-app-file-upload' in response.text
 
 
-def test_upload_size_limit_returns_fragment() -> None:
-    with TestClient(app) as client:
-        response = client.post(
-            "/jobs",
-            headers={"HX-Request": "true"},
-            files={"document": ("big.txt", b"x" * 5_200_000, "text/plain")},
-        )
-
-        assert response.status_code == 413
+@pytest.mark.parametrize("full,code", [(False, 413), (True, 503)])
+def test_upload_limits_return_fragment(monkeypatch, full, code) -> None:
+    monkeypatch.setenv("ANON_QUEUE_MAX_SIZE", "1")
+    with TestClient(app, headers={"HX-Request": "true"}) as client:
+        client.portal.call(app.state.queue.stop)
+        for _ in range(2 if full else 1):
+            response = client.post("/jobs", files={"document": ("a", bytes(1 if full else 2**23))})
+        assert response.status_code == code
         assert "Odrzucono upload" in response.text
         assert 'id="job-panel"' not in response.text
 
