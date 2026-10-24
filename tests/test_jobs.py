@@ -121,14 +121,13 @@ async def test_queue_passes_replacement_style_to_anonymizer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_queue_rate_limits_submissions_per_ip() -> None:
-    queue = _make_queue(_FakeAnonymizer(), rate_limit_submissions=1)
+@pytest.mark.parametrize("limit,code", [("rate_limit_submissions", 429), ("max_size", 503)])
+async def test_queue_rejects_submissions_over_capacity_or_ip_rate_limit(limit, code) -> None:
+    queue = _make_queue(_FakeAnonymizer(), **{limit: 1})
+    upload = dict(ip="127.0.0.1", content_type=DOCX_MIME, data=_docx_bytes("a"))
+    await queue.submit(filename="a.docx", **upload)
 
-    await queue.submit(
-        ip="127.0.0.1", filename="a.docx", content_type=DOCX_MIME, data=_docx_bytes("a")
-    )
-
-    with pytest.raises(QueueRejected, match="Limit uploadów"):
-        await queue.submit(
-            ip="127.0.0.1", filename="b.docx", content_type=DOCX_MIME, data=_docx_bytes("b")
-        )
+    message = "Limit uploadów" if code == 429 else "Kolejka jest pełna"
+    with pytest.raises(QueueRejected, match=message) as error:
+        await queue.submit(filename="b.docx", **upload)
+    assert error.value.status_code == code
